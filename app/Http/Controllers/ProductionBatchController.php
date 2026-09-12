@@ -3,11 +3,13 @@
 namespace App\Http\Controllers;
 
 use App\Models\ProductionBatch;
-use App\Models\FeedFormulation;
-use App\Models\FeedFormulationItem;
-use App\Models\ProductionMaterialUsage;
+use App\Models\FeedFormula;
+use App\Models\FormulaItem;
+use App\Models\ProductionBatchMaterial;
 use App\Models\RawMaterial;
 use App\Models\Inventory;
+use App\Models\FeedProduct;
+use App\Models\StockAlert;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 
@@ -15,12 +17,33 @@ class ProductionBatchController extends Controller
 {
     public function __construct()
     {
-        $this->middleware('auth');
+        $this->middleware(['auth', 'role:production_manager,super_admin']);
     }
 
-    public function index()
+    public function index(Request $request)
     {
-        $batches = ProductionBatch::with('feedProduct','formulation')->paginate(15);
+        $query = ProductionBatch::with(['feedProduct', 'formula', 'materials.rawMaterial']);
+
+        if ($search = $request->get('q')) {
+            $query->where(function ($q) use ($search) {
+                $q->where('batch_number', 'like', "%{$search}%")
+                    ->orWhereHas('feedProduct', function ($pq) use ($search) {
+                        $pq->where('product_name', 'like', "%{$search}%")
+                           ->orWhere('product_code', 'like', "%{$search}%");
+                    });
+            });
+        }
+
+        if ($status = $request->get('status')) {
+            $query->where('status', strtolower($status));
+        }
+
+        $batches = $query->orderByDesc('id')->paginate(15);
+
+        if ($request->wantsJson() || $request->expectsJson()) {
+            return response()->json($batches);
+        }
+
         return view('production_batches.index', compact('batches'));
     }
 
@@ -32,98 +55,333 @@ class ProductionBatchController extends Controller
     public function store(Request $request)
     {
         $data = $request->validate([
-            'batch_no' => 'required|unique:production_batches,batch_no',
+            'batch_number' => 'required|string|max:50|unique:production_batches,batch_number',
             'feed_product_id' => 'required|exists:feed_products,id',
-            'feed_formulation_id' => 'required|exists:feed_formulations,id',
-            'batch_setting_id' => 'nullable|exists:batch_settings,id',
+            'feed_formula_id' => 'required|exists:feed_formulas,id',
             'production_date' => 'required|date',
-            'quantity_kg' => 'required|numeric',
-            'sacks_produced' => 'nullable|integer',
+            'quantity_kg' => 'nullable|numeric|min:0',
+            'sacks_produced' => 'required|integer|min:1',
+            'status' => 'required|in:planned,in_progress,completed,cancelled',
+            'notes' => 'nullable|string|max:1000',
         ]);
 
-        DB::transaction(function () use ($data, $request) {
-            $userId = $request->user()->id;
+        $batch = DB::transaction(function () use ($data, $request) {
+            $product = FeedProduct::findOrFail($data['feed_product_id']);
+            $formula = FeedFormula::with('items.rawMaterial')->findOrFail($data['feed_formula_id']);
+            $bagWeight = (float) ($product->bag_weight_kg ?? 25);
+            $totalOutputKg = !empty($data['quantity_kg']) && $data['quantity_kg'] > 0
+                ? (float) $data['quantity_kg']
+                : (float) ($data['sacks_produced'] * $bagWeight);
+
             $batch = ProductionBatch::create([
-                'batch_no' => $data['batch_no'],
+                'batch_number' => strtoupper($data['batch_number']),
                 'feed_product_id' => $data['feed_product_id'],
-                'feed_formulation_id' => $data['feed_formulation_id'],
-                'batch_setting_id' => $data['batch_setting_id'] ?? null,
+                'feed_formula_id' => $data['feed_formula_id'],
                 'production_date' => $data['production_date'],
-                'quantity_kg' => $data['quantity_kg'],
-                'sacks_produced' => $data['sacks_produced'] ?? 0,
-                'status' => 'completed',
-                'notes' => $request->get('notes'),
-                'created_by' => $userId,
+                'quantity_kg' => $totalOutputKg,
+                'quantity_produced' => $totalOutputKg,
+                'sacks_produced' => $data['sacks_produced'],
+                'total_sacks' => $data['sacks_produced'],
+                'status' => strtolower($data['status']),
+                'notes' => $data['notes'] ?? null,
+                'encoded_by' => $request->user()->id,
+                'started_at' => in_array($data['status'], ['in_progress', 'completed']) ? now() : null,
+                'completed_at' => $data['status'] === 'completed' ? now() : null,
             ]);
 
-            $formulation = FeedFormulation::findOrFail($data['feed_formulation_id']);
-            $items = FeedFormulationItem::where('feed_formulation_id', $formulation->id)->get();
-
-            $ratio = $data['quantity_kg'] / max(1, $formulation->batch_size_kg);
-
-            foreach ($items as $item) {
-                $qtyUsed = round($item->quantity_required * $ratio, 3);
-                ProductionMaterialUsage::create([
-                    'production_batch_id' => $batch->id,
-                    'raw_material_id' => $item->raw_material_id,
-                    'quantity_used' => $qtyUsed,
-                    'unit' => $item->unit,
-                ]);
-
-                // Deduct raw material stock
-                $rm = RawMaterial::find($item->raw_material_id);
-                if ($rm) {
-                    $rm->current_stock = max(0, $rm->current_stock - $qtyUsed);
-                    $rm->save();
-
-                    // inventory out
-                    Inventory::create([
-                        'item_type' => 'raw_material',
-                        'raw_material_id' => $rm->id,
-                        'movement_type' => 'out',
-                        'quantity' => $qtyUsed,
-                        'balance_after' => $rm->current_stock,
-                        'transaction_date' => now(),
-                        'remarks' => 'Used in production batch ' . $batch->batch_no,
-                    ]);
-
-                    // stock alerts
-                    if ($rm->current_stock <= $rm->critical_level) {
-                        \App\Models\StockAlert::create([
-                            'raw_material_id' => $rm->id,
-                            'alert_type' => 'critical_stock',
-                            'message' => "Critical stock: {$rm->material_name}",
-                            'status' => 'active',
-                        ]);
-                    } elseif ($rm->current_stock <= $rm->reorder_level) {
-                        \App\Models\StockAlert::create([
-                            'raw_material_id' => $rm->id,
-                            'alert_type' => 'low_stock',
-                            'message' => "Low stock: {$rm->material_name}",
-                            'status' => 'active',
-                        ]);
-                    }
-                }
+            if ($data['status'] === 'completed') {
+                $this->completeProductionBatch($batch, $formula, $product, $totalOutputKg, $data['sacks_produced']);
             }
 
-            // Add finished product inventory
-            Inventory::create([
-                'item_type' => 'finished_product',
-                'feed_product_id' => $data['feed_product_id'],
-                'movement_type' => 'in',
-                'quantity' => $data['quantity_kg'],
-                'balance_after' => null,
-                'transaction_date' => now(),
-                'remarks' => 'Produced in batch ' . $batch->batch_no,
-            ]);
+            return $batch->fresh(['feedProduct', 'formula', 'materials.rawMaterial']);
         });
 
-        return redirect()->route('production_batches.index')->with('success','Production batch recorded');
+        if ($request->wantsJson() || $request->isJson() || $request->expectsJson()) {
+            return response()->json([
+                'created' => true,
+                'batch' => $batch,
+            ], 201);
+        }
+
+        return redirect()->route('production_batches.index')->with('success', 'Production batch recorded successfully.');
     }
 
     public function show(ProductionBatch $production_batch)
     {
-        $production_batch->load('usages.rawMaterial','feedProduct','formulation');
-        return view('production_batches.show', ['batch'=>$production_batch]);
+        $production_batch->load('materials.rawMaterial', 'feedProduct', 'formula');
+        if (request()->wantsJson() || request()->expectsJson()) {
+            return response()->json($production_batch);
+        }
+        return view('production_batches.show', ['batch' => $production_batch]);
+    }
+
+    public function edit(ProductionBatch $production_batch)
+    {
+        $production_batch->load('materials.rawMaterial', 'feedProduct', 'formula');
+        return view('production_batches.edit', ['batch' => $production_batch]);
+    }
+
+    public function update(Request $request, ProductionBatch $production_batch)
+    {
+        $data = $request->validate([
+            'batch_number' => 'required|string|max:50|unique:production_batches,batch_number,' . $production_batch->id,
+            'feed_product_id' => 'required|exists:feed_products,id',
+            'feed_formula_id' => 'required|exists:feed_formulas,id',
+            'production_date' => 'required|date',
+            'quantity_kg' => 'nullable|numeric|min:0',
+            'sacks_produced' => 'required|integer|min:1',
+            'status' => 'required|in:planned,in_progress,completed,cancelled',
+            'notes' => 'nullable|string|max:1000',
+        ]);
+
+        DB::transaction(function () use ($data, $production_batch) {
+            $prevStatus = strtolower($production_batch->status ?? 'planned');
+            $newStatus = strtolower($data['status']);
+
+            $product = FeedProduct::findOrFail($data['feed_product_id']);
+            $formula = FeedFormula::with('items.rawMaterial')->findOrFail($data['feed_formula_id']);
+            $bagWeight = (float) ($product->bag_weight_kg ?? 25);
+            $totalOutputKg = !empty($data['quantity_kg']) && $data['quantity_kg'] > 0
+                ? (float) $data['quantity_kg']
+                : (float) ($data['sacks_produced'] * $bagWeight);
+
+            // Case 1: Was completed, but now moving to planned, in_progress, or cancelled -> Reverse inventory
+            if ($prevStatus === 'completed' && $newStatus !== 'completed') {
+                $this->reverseBatchInventory($production_batch);
+                $production_batch->total_raw_material_used = 0;
+                $production_batch->completed_at = null;
+            }
+
+            // Case 2: Was completed, and remains completed, but parameters changed -> Reverse and re-apply
+            elseif ($prevStatus === 'completed' && $newStatus === 'completed') {
+                $this->reverseBatchInventory($production_batch);
+                $this->completeProductionBatch($production_batch, $formula, $product, $totalOutputKg, $data['sacks_produced']);
+            }
+
+            // Case 3: Was not completed, and now transitioned to completed -> Apply completion
+            elseif ($prevStatus !== 'completed' && $newStatus === 'completed') {
+                $this->completeProductionBatch($production_batch, $formula, $product, $totalOutputKg, $data['sacks_produced']);
+                $production_batch->completed_at = now();
+            }
+
+            if ($newStatus === 'in_progress' && !$production_batch->started_at) {
+                $production_batch->started_at = now();
+            }
+
+            $production_batch->update([
+                'batch_number' => strtoupper($data['batch_number']),
+                'feed_product_id' => $data['feed_product_id'],
+                'feed_formula_id' => $data['feed_formula_id'],
+                'production_date' => $data['production_date'],
+                'quantity_kg' => $totalOutputKg,
+                'quantity_produced' => $totalOutputKg,
+                'sacks_produced' => $data['sacks_produced'],
+                'total_sacks' => $data['sacks_produced'],
+                'status' => $newStatus,
+                'notes' => $data['notes'] ?? null,
+            ]);
+        });
+
+        if ($request->wantsJson() || $request->expectsJson()) {
+            return response()->json([
+                'updated' => true,
+                'batch' => $production_batch->fresh(['feedProduct', 'formula', 'materials.rawMaterial'])
+            ], 200);
+        }
+
+        return redirect()->route('production_batches.index')->with('success', 'Production batch updated successfully.');
+    }
+
+    public function destroy(ProductionBatch $production_batch)
+    {
+        DB::transaction(function () use ($production_batch) {
+            if (strtolower($production_batch->status) === 'completed') {
+                $this->reverseBatchInventory($production_batch);
+            }
+            $production_batch->materials()->delete();
+            $production_batch->delete();
+        });
+
+        if (request()->wantsJson() || request()->expectsJson()) {
+            return response()->json(['deleted' => true], 200);
+        }
+
+        return redirect()->route('production_batches.index')->with('success', 'Production batch deleted and inventory updated.');
+    }
+
+    /**
+     * Executes completion of a production batch:
+     * - Computes raw material requirements from formula
+     * - Locks and verifies stock
+     * - Deducts raw materials
+     * - Increments finished product stock
+     * - Records inventory movements
+     * - Computes production yield
+     */
+    private function completeProductionBatch(
+        ProductionBatch $batch,
+        FeedFormula $formula,
+        FeedProduct $product,
+        float $totalOutputKg,
+        int $sacksProduced
+    ): void {
+        $items = FormulaItem::where('feed_formula_id', $formula->id)->get();
+        abort_if($items->isEmpty(), 422, 'The linked formulation has no ingredient lines.');
+
+        $formulaBatchSize = max(1.0, (float) ($formula->batch_size_kg ?: $formula->batch_size ?: 1000));
+        $ratio = $totalOutputKg / $formulaBatchSize;
+
+        $requirements = [];
+        $totalRawUsed = 0.0;
+
+        // 1. Verify all raw materials have sufficient stock before making any deductions
+        foreach ($items as $item) {
+            $qtyNeeded = round((float) $item->quantity_required * $ratio, 3);
+            $rm = RawMaterial::lockForUpdate()->find($item->raw_material_id);
+            abort_if(!$rm, 422, "Raw material ID {$item->raw_material_id} could not be located.");
+
+            if ((float) $rm->quantity_on_hand < $qtyNeeded) {
+                $name = $rm->material_name ?? $rm->name;
+                $avail = number_format((float) $rm->quantity_on_hand, 2);
+                $need = number_format($qtyNeeded, 2);
+                abort(422, "Insufficient physical stock for {$name}: requires {$need} {$rm->unit}, but only {$avail} {$rm->unit} is available in the silo.");
+            }
+
+            $requirements[] = [
+                'rawMaterial' => $rm,
+                'qtyNeeded' => $qtyNeeded,
+                'unit' => $item->unit ?: $rm->unit ?: 'kg',
+            ];
+            $totalRawUsed += $qtyNeeded;
+        }
+
+        // 2. Perform deductions and log usage and inventory movements
+        $batch->materials()->delete();
+
+        foreach ($requirements as $req) {
+            $rm = $req['rawMaterial'];
+            $qtyUsed = $req['qtyNeeded'];
+
+            $newOnHand = max(0.0, (float) $rm->quantity_on_hand - $qtyUsed);
+            $rm->quantity_on_hand = $newOnHand;
+            $rm->quantity = $newOnHand;
+            $rm->save();
+
+            ProductionBatchMaterial::create([
+                'production_batch_id' => $batch->id,
+                'raw_material_id' => $rm->id,
+                'quantity_used' => $qtyUsed,
+                'unit' => $req['unit'],
+                'unit_cost' => $rm->cost_per_unit ?? $rm->unit_cost ?? 0,
+            ]);
+
+            Inventory::create([
+                'inventory_type' => 'raw_material',
+                'raw_material_id' => $rm->id,
+                'reference_batch_id' => $batch->id,
+                'quantity' => -$qtyUsed,
+                'quantity_available' => $newOnHand,
+                'unit' => $rm->unit ?: 'kg',
+                'last_updated' => now(),
+            ]);
+
+            // Low stock alert check
+            if ($newOnHand <= (float) $rm->reorder_level) {
+                StockAlert::updateOrCreate(
+                    ['raw_material_id' => $rm->id, 'status' => 'active'],
+                    [
+                        'inventory_type' => 'raw_material',
+                        'current_quantity' => $newOnHand,
+                        'threshold_quantity' => $rm->reorder_level,
+                        'alert_level' => 'low_stock',
+                        'alert_message' => "Low stock alert: {$rm->material_name} is at {$newOnHand} {$rm->unit} (Reorder level: {$rm->reorder_level})",
+                    ]
+                );
+            }
+        }
+
+        // 3. Increment finished product bags
+        $lockedProduct = FeedProduct::lockForUpdate()->findOrFail($product->id);
+        $newProductBags = (float) $lockedProduct->quantity_bags + (float) $sacksProduced;
+        $lockedProduct->quantity_bags = $newProductBags;
+        $lockedProduct->save();
+
+        Inventory::create([
+            'inventory_type' => 'finished_product',
+            'feed_product_id' => $lockedProduct->id,
+            'reference_batch_id' => $batch->id,
+            'quantity' => $sacksProduced,
+            'quantity_available' => $newProductBags,
+            'unit' => 'bag',
+            'last_updated' => now(),
+        ]);
+
+        // 4. Record yield and totals
+        $batch->total_raw_material_used = $totalRawUsed;
+        $batch->save();
+    }
+
+    /**
+     * Reverses all inventory changes made by a completed batch:
+     * - Restores raw materials
+     * - Checks finished product stock (cannot drop below 0)
+     * - Deducts finished bags
+     * - Records reversing inventory movements
+     */
+    private function reverseBatchInventory(ProductionBatch $batch): void
+    {
+        $batch->load('materials.rawMaterial', 'feedProduct');
+
+        // Restore raw materials
+        foreach ($batch->materials as $material) {
+            $rm = $material->rawMaterial;
+            if ($rm) {
+                $qty = (float) $material->quantity_used;
+                $newOnHand = (float) $rm->quantity_on_hand + $qty;
+                $rm->quantity_on_hand = $newOnHand;
+                $rm->quantity = $newOnHand;
+                $rm->save();
+
+                Inventory::create([
+                    'inventory_type' => 'raw_material',
+                    'raw_material_id' => $rm->id,
+                    'reference_batch_id' => $batch->id,
+                    'quantity' => $qty,
+                    'quantity_available' => $newOnHand,
+                    'unit' => $material->unit ?: $rm->unit ?: 'kg',
+                    'last_updated' => now(),
+                ]);
+            }
+        }
+
+        // Deduct finished product
+        $product = $batch->feedProduct;
+        if ($product) {
+            $lockedProduct = FeedProduct::lockForUpdate()->find($product->id);
+            if ($lockedProduct) {
+                $bags = (float) ($batch->sacks_produced ?? 0);
+                abort_if(
+                    (float) $lockedProduct->quantity_bags < $bags,
+                    422,
+                    "Cannot cancel/reverse batch: Only {$lockedProduct->quantity_bags} bags of {$lockedProduct->product_name} remain in stock, but {$bags} bags were produced."
+                );
+
+                $newProductBags = max(0.0, (float) $lockedProduct->quantity_bags - $bags);
+                $lockedProduct->quantity_bags = $newProductBags;
+                $lockedProduct->save();
+
+                Inventory::create([
+                    'inventory_type' => 'finished_product',
+                    'feed_product_id' => $lockedProduct->id,
+                    'reference_batch_id' => $batch->id,
+                    'quantity' => -$bags,
+                    'quantity_available' => $newProductBags,
+                    'unit' => 'bag',
+                    'last_updated' => now(),
+                ]);
+            }
+        }
+
+        $batch->materials()->delete();
     }
 }

@@ -13,9 +13,15 @@ class Distribution extends Model
 
     protected $fillable = [
         'distribution_number',
+        'transaction_number',
         'buyer_id',
+        'buyer_name',
+        'address',
+        'contact_number',
         'distribution_date',
+        'delivery_date',
         'total_quantity',
+        'total_amount',
         'remarks',
         'status',
         'encoded_by',

@@ -2,48 +2,50 @@
 
 namespace Database\Seeders;
 
+use App\Models\User;
 use Illuminate\Database\Seeder;
 use Illuminate\Support\Facades\Hash;
-use App\Models\User;
+use Illuminate\Support\Facades\DB;
 
 class UsersTableSeeder extends Seeder
 {
     public function run(): void
     {
-        User::updateOrCreate(
-            ['email' => 'superadmin@example.com'],
-            [
-                'name' => 'Super Admin',
-                'password' => Hash::make('password'),
-                'role' => 'super_admin',
-                'phone' => '09170000000',
-                'address' => 'Head Office',
-                'is_active' => true,
-            ]
-        );
+        $users = [
+            ['email' => 'superadmin@example.com', 'name' => 'Super Administrator', 'username' => 'superadmin', 'password' => 'password', 'role' => 'super_admin'],
+            ['email' => 'pm@example.com', 'name' => 'Production Manager', 'username' => 'pm', 'password' => 'password', 'role' => 'production_manager'],
+            ['email' => 'admin@example.com', 'name' => 'Administrator', 'username' => 'admin', 'password' => 'password', 'role' => 'administrator'],
+        ];
 
-        User::updateOrCreate(
-            ['email' => 'pm@example.com'],
-            [
-                'name' => 'Production Manager',
-                'password' => Hash::make('password'),
-                'role' => 'production_manager',
-                'phone' => '09170000001',
-                'address' => 'Factory',
-                'is_active' => true,
-            ]
-        );
+        foreach ($users as $u) {
+            $username = $this->makeUniqueUsername($u['username'], $u['email']);
 
-        User::updateOrCreate(
-            ['email' => 'admin@example.com'],
-            [
-                'name' => 'Administrator',
-                'password' => Hash::make('password'),
-                'role' => 'administrator',
-                'phone' => '09170000002',
-                'address' => 'Office',
-                'is_active' => true,
-            ]
-        );
+            User::updateOrCreate(
+                ['email' => $u['email']],
+                [
+                    'name' => $u['name'],
+                    'username' => $username,
+                    'password' => Hash::make($u['password']),
+                    'role' => $u['role'],
+                    'status' => 'active',
+                ]
+            );
+        }
+    }
+
+    /**
+     * Generate a unique username by appending a numeric suffix when collisions exist.
+     */
+    private function makeUniqueUsername(string $base, string $email): string
+    {
+        $candidate = $base;
+        $i = 1;
+
+        while (DB::table('users')->where('username', $candidate)->where('email', '<>', $email)->exists()) {
+            $candidate = $base . $i;
+            $i++;
+        }
+
+        return $candidate;
     }
 }

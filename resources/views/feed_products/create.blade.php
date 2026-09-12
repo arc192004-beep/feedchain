@@ -1,10 +1,12 @@
-@extends('layouts.app')
+@extends('layouts.admin')
+
+@section('title', 'Add Feed Product')
+@section('page_title', 'Add Feed Product')
+
 @section('content')
-<h3>Add Feed Product</h3>
-<form method="POST" action="{{ route('feed_products.store') }}">@csrf
-<div class="mb-3"><label>Code</label><input name="product_code" class="form-control"></div>
-<div class="mb-3"><label>Name</label><input name="feed_name" class="form-control"></div>
-<div class="mb-3"><label>Type</label><input name="feed_type" class="form-control"></div>
-<div class="mb-3"><label>Unit weight (kg)</label><input name="unit_weight_kg" class="form-control" value="1"></div>
-<button class="btn btn-primary">Save</button></form>
+<form method="POST" action="{{ route('feed_products.store') }}" class="max-w-3xl rounded-xl bg-white p-6 shadow-sm">
+    @csrf
+    @include('feed_products._form')
+    <button class="mt-4 rounded-lg bg-blue-600 px-4 py-2 text-sm text-white hover:bg-blue-700">Save Product</button>
+</form>
 @endsection

@@ -9,13 +9,20 @@ class CustomerController extends Controller
 {
     public function __construct()
     {
-        $this->middleware('auth');
+        $this->middleware(['auth', 'role:production_manager,super_admin']);
     }
 
-    public function index()
+    public function index(Request $request)
     {
-        $items = Customer::paginate(15);
-        return view('customers.index', compact('items'));
+        $customers = Customer::query()
+            ->when($request->q, fn ($query, $q) => $query->where('name', 'like', "%{$q}%")->orWhere('address', 'like', "%{$q}%"))
+            ->orderBy('name')->paginate(15);
+
+        if ($request->wantsJson() || $request->expectsJson()) {
+            return response()->json($customers);
+        }
+
+        return view('customers.index', compact('customers'));
     }
 
     public function create()
@@ -25,13 +32,22 @@ class CustomerController extends Controller
 
     public function store(Request $request)
     {
-        $data = $request->validate([
-            'customer_code' => 'required|unique:customers,customer_code',
-            'customer_name' => 'required',
-        ]);
+        $customer = Customer::create($this->validated($request));
 
-        Customer::create($data);
-        return redirect()->route('customers.index')->with('success','Saved');
+        if ($request->wantsJson() || $request->expectsJson()) {
+            return response()->json($customer, 201);
+        }
+
+        return redirect()->route('customers.index')->with('success', 'Customer saved successfully.');
+    }
+
+    public function show(Customer $customer)
+    {
+        if (request()->wantsJson() || request()->expectsJson()) {
+            return response()->json($customer);
+        }
+
+        return view('customers.show', compact('customer'));
     }
 
     public function edit(Customer $customer)
@@ -41,18 +57,37 @@ class CustomerController extends Controller
 
     public function update(Request $request, Customer $customer)
     {
-        $data = $request->validate([
-            'customer_code' => 'required|unique:customers,customer_code,' . $customer->id,
-            'customer_name' => 'required',
-        ]);
+        $customer->update($this->validated($request));
 
-        $customer->update($data);
-        return redirect()->route('customers.index')->with('success','Updated');
+        if ($request->wantsJson() || $request->expectsJson()) {
+            return response()->json($customer->fresh(), 200);
+        }
+
+        return redirect()->route('customers.index')->with('success', 'Customer updated successfully.');
     }
 
     public function destroy(Customer $customer)
     {
+        abort_if($customer->sales()->exists(), 422, 'Customers with recorded sales cannot be deleted.');
+
         $customer->delete();
-        return redirect()->route('customers.index')->with('success','Deleted');
+
+        if (request()->wantsJson() || request()->expectsJson()) {
+            return response()->json(['deleted' => true], 200);
+        }
+
+        return redirect()->route('customers.index')->with('success', 'Customer deleted successfully.');
+    }
+
+    private function validated(Request $request): array
+    {
+        return $request->validate([
+            'name' => 'required|string|max:255',
+            'fish_cage' => 'nullable|string|max:255',
+            'address' => 'required|string|max:500',
+            'contact_number' => 'required|string|max:50',
+            'email' => 'nullable|email|max:255',
+            'status' => 'nullable|in:active,inactive',
+        ]);
     }
 }

@@ -13,8 +13,10 @@ class FeedFormula extends Model
 
     protected $fillable = [
         'formula_code',
+        'name',
         'formula_name',
         'feed_product_id',
+        'batch_size',
         'batch_size_kg',
         'status',
     ];

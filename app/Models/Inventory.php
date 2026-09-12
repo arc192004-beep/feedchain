@@ -10,16 +10,14 @@ class Inventory extends Model
     use HasFactory;
 
     protected $fillable = [
-        'item_type',
+        'inventory_type',
         'raw_material_id',
         'feed_product_id',
-        'reference_type',
-        'reference_id',
-        'movement_type',
         'quantity',
-        'balance_after',
-        'remarks',
-        'transaction_date',
+        'reference_batch_id',
+        'quantity_available',
+        'unit',
+        'last_updated',
     ];
 
     public function rawMaterial()

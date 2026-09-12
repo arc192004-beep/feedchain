@@ -1,39 +1,12 @@
-@extends('layouts.app')
+@extends('layouts.admin')
+
+@section('title', 'Create User')
+@section('page_title', 'Create User')
 
 @section('content')
-<h3>Create User</h3>
-
-<form method="POST" action="{{ route('users.store') }}">
-  @csrf
-  <div class="mb-3">
-    <label class="form-label">Name</label>
-    <input name="name" class="form-control" value="{{ old('name') }}">
-  </div>
-  <div class="mb-3">
-    <label class="form-label">Email</label>
-    <input name="email" class="form-control" value="{{ old('email') }}">
-  </div>
-  <div class="mb-3">
-    <label class="form-label">Password</label>
-    <input type="password" name="password" class="form-control">
-  </div>
-  <div class="mb-3">
-    <label class="form-label">Confirm Password</label>
-    <input type="password" name="password_confirmation" class="form-control">
-  </div>
-  <div class="mb-3">
-    <label class="form-label">Role</label>
-    <select name="role" class="form-select">
-      <option value="super_admin">Super Admin</option>
-      <option value="production_manager">Production Manager</option>
-      <option value="administrator" selected>Administrator</option>
-    </select>
-  </div>
-  <div class="mb-3 form-check">
-    <input type="checkbox" name="is_active" class="form-check-input" checked>
-    <label class="form-check-label">Active</label>
-  </div>
-  <button class="btn btn-primary">Save</button>
+<form method="POST" action="{{ route('users.store') }}" class="max-w-2xl rounded-xl bg-white p-6 shadow-sm">
+    @csrf
+    @include('users._form')
+    <button class="mt-4 rounded-lg bg-blue-600 px-4 py-2 text-sm text-white hover:bg-blue-700">Save User</button>
 </form>
-
 @endsection

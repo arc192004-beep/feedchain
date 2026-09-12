@@ -12,10 +12,10 @@ class Buyer extends Model
     protected $fillable = [
         'buyer_code',
         'buyer_name',
-        'buyer_type',
         'contact_person',
         'contact_number',
         'address',
+        'fishpond_or_cage_name',
     ];
 
     public function distributions()

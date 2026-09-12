@@ -10,12 +10,13 @@ class Sale extends Model
     use HasFactory;
 
     protected $fillable = [
-        'sale_no',
         'customer_id',
         'sale_date',
         'total_amount',
-        'remarks',
-        'created_by',
+        'feed_product_id',
+        'quantity',
+        'status',
+        'notes',
     ];
 
     public function customer()

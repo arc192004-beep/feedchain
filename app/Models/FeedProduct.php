@@ -11,12 +11,16 @@ class FeedProduct extends Model
 
     protected $fillable = [
         'product_code',
+        'name',
         'product_name',
         'feed_type',
         'description',
         'unit',
         'price',
         'status',
+        'quantity_bags',
+        'min_stock_bags',
+        'bag_weight_kg',
     ];
 
     public function formulas()

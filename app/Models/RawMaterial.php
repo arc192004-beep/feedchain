@@ -11,11 +11,15 @@ class RawMaterial extends Model
 
     protected $fillable = [
         'material_code',
+        'name',
         'material_name',
+        'category',
         'material_type',
         'unit',
+        'quantity',
         'quantity_on_hand',
         'reorder_level',
+        'unit_cost',
         'cost_per_unit',
         'status',
     ];

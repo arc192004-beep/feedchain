@@ -2,8 +2,8 @@
 
 namespace App\Models;
 
-use Illuminate\Database\Eloquent\Factories\\HasFactory;
-use Illuminate\\Database\\Eloquent\\Model;
+use Illuminate\Database\Eloquent\Factories\HasFactory;
+use Illuminate\Database\Eloquent\Model;
 
 class ProductionBatch extends Model
 {
@@ -44,6 +44,11 @@ class ProductionBatch extends Model
     public function materials()
     {
         return $this->hasMany(ProductionBatchMaterial::class, 'production_batch_id');
+    }
+
+    public function usages()
+    {
+        return $this->materials();
     }
 
     public function encodedBy()

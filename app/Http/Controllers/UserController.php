@@ -3,25 +3,29 @@
 namespace App\Http\Controllers;
 
 use App\Models\User;
+use App\Models\ActivityLog;
 use Illuminate\Http\Request;
-use Illuminate\Support\Facades\Hash;
 
 class UserController extends Controller
 {
     public function __construct()
     {
-        $this->middleware('auth');
-        $this->middleware('role:super_admin');
+        $this->middleware(['auth', 'role:super_admin']);
     }
 
     public function index(Request $request)
     {
         $query = User::query();
+
         if ($search = $request->get('q')) {
-            $query->where('name', 'like', "%{$search}%")->orWhere('email', 'like', "%{$search}%");
+            $query->where(function ($q) use ($search) {
+                $q->where('name', 'like', "%{$search}%")
+                    ->orWhere('email', 'like', "%{$search}%");
+            });
         }
 
-        $users = $query->orderBy('id','desc')->paginate(15);
+        $users = $query->orderByDesc('id')->paginate(15);
+
         return view('users.index', compact('users'));
     }
 
@@ -34,18 +38,15 @@ class UserController extends Controller
     {
         $data = $request->validate([
             'name' => 'required|string|max:255',
+            'username' => 'required|string|max:50|unique:users,username',
             'email' => 'required|email|unique:users,email',
             'password' => 'required|string|min:6|confirmed',
             'role' => 'required|in:super_admin,production_manager,administrator',
-            'phone' => 'nullable|string',
-            'address' => 'nullable|string',
-            'is_active' => 'sometimes|boolean',
+            'status' => 'required|in:active,inactive',
         ]);
 
-        $data['password'] = Hash::make($data['password']);
-        $data['is_active'] = $request->has('is_active');
-
-        User::create($data);
+        $user = User::create($data);
+        $this->log('create_account', "Created account {$user->username} with role {$user->role}");
 
         return redirect()->route('users.index')->with('success', 'User created successfully.');
     }
@@ -64,30 +65,53 @@ class UserController extends Controller
     {
         $data = $request->validate([
             'name' => 'required|string|max:255',
+            'username' => 'required|string|max:50|unique:users,username,' . $user->id,
             'email' => 'required|email|unique:users,email,' . $user->id,
             'password' => 'nullable|string|min:6|confirmed',
             'role' => 'required|in:super_admin,production_manager,administrator',
-            'phone' => 'nullable|string',
-            'address' => 'nullable|string',
-            'is_active' => 'sometimes|boolean',
+            'status' => 'required|in:active,inactive',
         ]);
 
-        if (!empty($data['password'])) {
-            $data['password'] = Hash::make($data['password']);
-        } else {
+        if (empty($data['password'])) {
             unset($data['password']);
         }
 
-        $data['is_active'] = $request->has('is_active');
-
+        $isRoleChange = $user->role !== $data['role'];
+        $isStatusChange = $user->status !== $data['status'];
+        $this->ensureFinalSuperAdminRemainsActive($user, $data);
         $user->update($data);
+        $this->log($isRoleChange ? 'role_assignment' : ($isStatusChange ? 'account_status_change' : 'update_account'), "Updated account {$user->username}");
 
         return redirect()->route('users.index')->with('success', 'User updated successfully.');
     }
 
     public function destroy(User $user)
     {
+        if ($user->id === auth()->id()) {
+            return back()->with('error', 'You cannot delete your own account.');
+        }
+
+        $this->ensureFinalSuperAdminRemainsActive($user, ['role' => 'deleted', 'status' => 'inactive']);
+
         $user->delete();
+        $this->log('delete_account', "Deleted account {$user->username}");
+
         return redirect()->route('users.index')->with('success', 'User deleted successfully.');
+    }
+
+    private function ensureFinalSuperAdminRemainsActive(User $user, array $changes): void
+    {
+        if ($user->role !== 'super_admin') return;
+        $remainsActiveSuperAdmin = ($changes['role'] ?? 'super_admin') === 'super_admin'
+            && ($changes['status'] ?? 'active') === 'active';
+        if ($remainsActiveSuperAdmin) return;
+        if (User::where('role', 'super_admin')->where('status', 'active')->count() <= 1) {
+            abort(422, 'The final active Super Administrator cannot be deactivated, reassigned, or deleted.');
+        }
+    }
+
+    private function log(string $action, string $description): void
+    {
+        ActivityLog::create(['user_id' => auth()->id(), 'action' => $action, 'module' => 'user_management', 'description' => $description]);
     }
 }

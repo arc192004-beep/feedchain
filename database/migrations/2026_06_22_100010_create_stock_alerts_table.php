@@ -8,6 +8,10 @@ return new class extends Migration
 {
     public function up(): void
     {
+        if (Schema::hasTable('stock_alerts')) {
+            return;
+        }
+
         Schema::create('stock_alerts', function (Blueprint $table) {
             $table->id();
             $table->enum('inventory_type', ['raw_material', 'finished_product']);

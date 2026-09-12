@@ -8,6 +8,10 @@ return new class extends Migration
 {
     public function up(): void
     {
+        if (Schema::hasTable('feed_formulas')) {
+            return;
+        }
+
         Schema::create('feed_formulas', function (Blueprint $table) {
             $table->id();
             $table->string('formula_code')->unique();

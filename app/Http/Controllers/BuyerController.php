@@ -9,12 +9,27 @@ class BuyerController extends Controller
 {
     public function __construct()
     {
-        $this->middleware('auth');
+        $this->middleware(['auth', 'role:production_manager,super_admin']);
     }
 
-    public function index()
+    public function index(Request $request)
     {
-        $items = Buyer::paginate(15);
+        $query = Buyer::query();
+
+        if ($search = $request->get('q')) {
+            $query->where(function ($q) use ($search) {
+                $q->where('buyer_name', 'like', "%{$search}%")
+                    ->orWhere('fishpond_or_cage_name', 'like', "%{$search}%")
+                    ->orWhere('address', 'like', "%{$search}%");
+            });
+        }
+
+        $items = $query->orderBy('buyer_name')->paginate(15);
+
+        if ($request->wantsJson() || $request->expectsJson()) {
+            return response()->json($items);
+        }
+
         return view('buyers.index', compact('items'));
     }
 
@@ -26,13 +41,29 @@ class BuyerController extends Controller
     public function store(Request $request)
     {
         $data = $request->validate([
-            'buyer_code' => 'required|unique:buyers,buyer_code',
-            'buyer_name' => 'required',
-            'buyer_type' => 'required',
+            'buyer_name' => 'required|string|max:255',
+            'fishpond_or_cage_name' => 'required|string|max:255',
+            'address' => 'required|string|max:500',
+            'contact_number' => 'required|string|max:50',
+            'contact_person' => 'nullable|string|max:255',
         ]);
 
-        Buyer::create($data);
-        return redirect()->route('buyers.index')->with('success','Saved');
+        $data['buyer_code'] = 'BUYER-' . str_pad((string) (Buyer::max('id') + 1), 4, '0', STR_PAD_LEFT);
+        $buyer = Buyer::create($data);
+
+        if ($request->wantsJson() || $request->expectsJson()) {
+            return response()->json($buyer, 201);
+        }
+
+        return redirect()->route('buyers.index')->with('success', 'Buyer registered successfully.');
+    }
+
+    public function show(Buyer $buyer)
+    {
+        if (request()->wantsJson() || request()->expectsJson()) {
+            return response()->json($buyer);
+        }
+        return view('buyers.show', compact('buyer'));
     }
 
     public function edit(Buyer $buyer)
@@ -43,18 +74,32 @@ class BuyerController extends Controller
     public function update(Request $request, Buyer $buyer)
     {
         $data = $request->validate([
-            'buyer_code' => 'required|unique:buyers,buyer_code,' . $buyer->id,
-            'buyer_name' => 'required',
-            'buyer_type' => 'required',
+            'buyer_name' => 'required|string|max:255',
+            'fishpond_or_cage_name' => 'required|string|max:255',
+            'address' => 'required|string|max:500',
+            'contact_number' => 'required|string|max:50',
+            'contact_person' => 'nullable|string|max:255',
         ]);
 
         $buyer->update($data);
-        return redirect()->route('buyers.index')->with('success','Updated');
+
+        if ($request->wantsJson() || $request->expectsJson()) {
+            return response()->json($buyer->fresh(), 200);
+        }
+
+        return redirect()->route('buyers.index')->with('success', 'Buyer updated successfully.');
     }
 
     public function destroy(Buyer $buyer)
     {
+        abort_if($buyer->distributions()->exists(), 422, 'Cannot delete buyer because they have distribution delivery records.');
+
         $buyer->delete();
-        return redirect()->route('buyers.index')->with('success','Deleted');
+
+        if (request()->wantsJson() || request()->expectsJson()) {
+            return response()->json(['deleted' => true], 200);
+        }
+
+        return redirect()->route('buyers.index')->with('success', 'Buyer deleted successfully.');
     }
 }

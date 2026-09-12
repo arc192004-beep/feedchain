@@ -14,6 +14,7 @@ class DistributionItem extends Model
         'feed_product_id',
         'quantity',
         'unit_price',
+        'line_total',
         'subtotal',
     ];
 
