@@ -11,11 +11,15 @@ class Inventory extends Model
 
     protected $fillable = [
         'inventory_type',
+        'movement_type',
         'raw_material_id',
         'feed_product_id',
         'quantity',
         'reference_batch_id',
+        'reference_number',
+        'user_id',
         'quantity_available',
+        'quantity_kg',
         'unit',
         'last_updated',
     ];

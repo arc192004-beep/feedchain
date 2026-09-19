@@ -9,7 +9,6 @@ import {
     Waves,
     LockKeyhole,
 } from "lucide-react";
-import FeedChainLogo from "./feedchain-logo";
 
 export default function Login() {
     const [showPassword, setShowPassword] = useState(false);
@@ -245,22 +244,7 @@ export default function Login() {
                         <span className="feed pellet-15" />
                         <span className="feed pellet-16" />
                     </div>
-
-                    {/* =====================================================
-                        WATER WAVES
-                    ====================================================== */}
-                    <div
-                        className="
-                            absolute
-                            bottom-0
-                            left-0
-                            w-full
-                            opacity-20
-                            z-10
-                        "
-                    >
-                        <Waves className="w-full h-24" />
-                    </div>
+        
 
                     {/* =====================================================
                         HIGHLIGHTED FEEDCHAIN LOGO
@@ -341,13 +325,15 @@ export default function Login() {
                                     "
                                 />
 
-                                <FeedChainLogo
+                                <img
+                                    src="/images/feedchain-logo.png"
+                                    alt="FEEDCHAIN logo"
                                     className="
                                         relative
                                         z-10
                                         w-[135px]
                                         h-[135px]
-                                        text-white
+                                        object-contain
                                         drop-shadow-[0_10px_20px_rgba(0,0,0,0.35)]
                                     "
                                 />
@@ -411,27 +397,6 @@ export default function Login() {
                             decision support.
                         </p>
 
-                        <div
-                            className="
-                                mt-7
-                                inline-flex
-                                items-center
-                                gap-2
-                                px-4
-                                py-2
-                                rounded-full
-                                bg-white/10
-                                border
-                                border-white/20
-                                backdrop-blur-sm
-                                text-white/90
-                                text-xs
-                                font-semibold
-                            "
-                        >
-                            <ShieldCheck size={15} />
-                            Secure Management System
-                        </div>
                     </div>
                 </div>
 
@@ -499,11 +464,13 @@ export default function Login() {
                                         shadow-xl
                                     "
                                 >
-                                    <FeedChainLogo
+                                    <img
+                                        src="/images/feedchain-logo.png"
+                                        alt="FEEDCHAIN logo"
                                         className="
                                             w-20
                                             h-20
-                                            text-cyan-600
+                                            object-contain
                                             drop-shadow-md
                                         "
                                     />

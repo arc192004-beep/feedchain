@@ -52,4 +52,9 @@ class FeedProduct extends Model
     {
         return $this->hasMany(StockAlert::class);
     }
+
+    public function getFeedNameAttribute()
+    {
+        return $this->product_name ?: $this->name;
+    }
 }

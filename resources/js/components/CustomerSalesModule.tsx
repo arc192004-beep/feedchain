@@ -1,5 +1,6 @@
 import React, { useState } from "react";
 import { User, CustomerProfile, SalesRecord, FeedProduct } from "../types";
+import { csrfFetch } from "../lib/csrf-fetch";
 import { 
   Search, Plus, Edit2, Trash2, ShieldAlert, AlertTriangle, 
   MapPin, Phone, DollarSign, Calendar, RefreshCw 
@@ -92,7 +93,7 @@ export default function CustomerSalesModule({
     }
 
     try {
-      const response = await fetch(editItem ? `/customers/${editItem.id}` : '/customers', {
+      const response = await csrfFetch(editItem ? `/customers/${editItem.id}` : '/customers', {
         method: editItem ? 'PUT' : 'POST',
         headers: { 'Content-Type': 'application/json', 'Accept': 'application/json', 'X-CSRF-TOKEN': document.querySelector<HTMLMetaElement>('meta[name="csrf-token"]')?.content ?? '' },
         body: JSON.stringify({ name: custName, address: custAddress, contact_number: custPhone, status: 'active' }),
@@ -129,7 +130,7 @@ export default function CustomerSalesModule({
     }
 
     try {
-      const response = await fetch(editItem ? `/sales/${editItem.id}` : '/sales', {
+      const response = await csrfFetch(editItem ? `/sales/${editItem.id}` : '/sales', {
         method: editItem ? 'PUT' : 'POST',
         headers: { 'Content-Type': 'application/json', 'Accept': 'application/json', 'X-CSRF-TOKEN': document.querySelector<HTMLMetaElement>('meta[name="csrf-token"]')?.content ?? '' },
         body: JSON.stringify({ customer_id: saleCustomerId, sale_date: saleDate, items: [{ feed_product_id: selectedProduct.id, quantity: saleQtyBags, unit_price: saleUnitPrice }] }),
@@ -149,7 +150,7 @@ export default function CustomerSalesModule({
     if (!confirm(`Are you sure you want to delete this ${type}?`)) return;
 
     try {
-      const response = await fetch(`/${type === 'customer' ? 'customers' : 'sales'}/${id}`, { method: 'DELETE', headers: { 'Accept': 'application/json', 'X-CSRF-TOKEN': document.querySelector<HTMLMetaElement>('meta[name="csrf-token"]')?.content ?? '' } });
+      const response = await csrfFetch(`/${type === 'customer' ? 'customers' : 'sales'}/${id}`, { method: 'DELETE', headers: { 'Accept': 'application/json' } });
       const saved = await response.json();
       if (!response.ok) throw new Error(saved.message || 'Could not delete record.');
       if (type === "customer") onUpdateCustomers(customers.filter(c => c.id !== id));

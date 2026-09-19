@@ -16,6 +16,7 @@ class ProductionBatchMaterial extends Model
         'raw_material_id',
         'quantity_used',
         'unit',
+        'unit_cost',
     ];
 
     public function batch()
@@ -26,5 +27,17 @@ class ProductionBatchMaterial extends Model
     public function rawMaterial()
     {
         return $this->belongsTo(RawMaterial::class, 'raw_material_id');
+    }
+
+    /**
+     * Get unit, falling back to related raw material's unit if not set.
+     */
+    public function getUnitAttribute($value)
+    {
+        if (! empty($value)) {
+            return $value;
+        }
+
+        return $this->rawMaterial?->unit ?? 'kg';
     }
 }

@@ -49,6 +49,7 @@ export default function Dashboard() {
     const [buyers, setBuyers] = useState<any[]>(props?.buyers || []);
     const [customers, setCustomers] = useState<any[]>(props?.customers || []);
     const [inventoryMovements, setInventoryMovements] = useState<any[]>(props?.inventoryMovements || []);
+    const analytics = props?.analytics;
 
     useEffect(() => {
         const requestedTab = getInitialTab(page.url as string);
@@ -184,11 +185,7 @@ export default function Dashboard() {
 
                 {currentTab === 'analytics' && (
                     <AnalyticsModule
-                        rawMaterials={rawMaterials}
-                        feedProducts={feedProducts}
-                        productionBatches={productionBatches}
-                        distributions={distributions}
-                        sales={sales}
+                        analytics={analytics as any}
                     />
                 )}
 

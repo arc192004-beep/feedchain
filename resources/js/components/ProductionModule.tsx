@@ -1,5 +1,6 @@
 import React, { useEffect, useMemo, useState } from "react";
 import { router } from "@inertiajs/react";
+import { csrfFetch } from "../lib/csrf-fetch";
 import type { User, RawMaterial, FeedProduct, FeedFormula, ProductionBatch } from "../types";
 import { 
   Plus, Edit2, Trash2, Search, Filter, ShieldAlert, 
@@ -280,7 +281,7 @@ export default function ProductionModule({
       const url = editItem ? route('raw_materials.update', editItem.id) : route('raw_materials.store');
       const method = editItem ? 'PUT' : 'POST';
 
-      const res = await fetch(url, {
+      const res = await csrfFetch(url, {
         method,
         headers: { 'Content-Type': 'application/json', 'Accept': 'application/json', 'X-CSRF-TOKEN': csrf },
         body: JSON.stringify(payload),
@@ -336,7 +337,7 @@ export default function ProductionModule({
       const url = editItem ? route('feed_products.update', editItem.id) : route('feed_products.store');
       const method = editItem ? 'PUT' : 'POST';
 
-      const res = await fetch(url, {
+      const res = await csrfFetch(url, {
         method,
         headers: { 'Content-Type': 'application/json', 'Accept': 'application/json', 'X-CSRF-TOKEN': csrf },
         body: JSON.stringify(payload),
@@ -419,7 +420,7 @@ export default function ProductionModule({
       const url = editItem ? route('feed_formulas.update', editItem.id) : route('feed_formulas.store');
       const method = editItem ? 'PUT' : 'POST';
 
-      const res = await fetch(url, {
+      const res = await csrfFetch(url, {
         method,
         headers: { 'Content-Type': 'application/json', 'Accept': 'application/json', 'X-CSRF-TOKEN': csrf },
         body: JSON.stringify(payload),
@@ -509,7 +510,7 @@ export default function ProductionModule({
       const url = editItem ? route('production_batches.update', editItem.id) : route('production_batches.store');
       const method = editItem ? 'PUT' : 'POST';
 
-      const res = await fetch(url, {
+      const res = await csrfFetch(url, {
         method,
         headers: { 'Content-Type': 'application/json', 'Accept': 'application/json', 'X-CSRF-TOKEN': csrf },
         body: JSON.stringify(payload),
@@ -556,7 +557,7 @@ export default function ProductionModule({
 
     try {
       const csrf = document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || '';
-      const res = await fetch(route('production_batches.update', batch.id), {
+      const res = await csrfFetch(route('production_batches.update', batch.id), {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json', 'Accept': 'application/json', 'X-CSRF-TOKEN': csrf },
         body: JSON.stringify(payload),
@@ -604,7 +605,7 @@ export default function ProductionModule({
         url = route('production_batches.destroy', confirmDialog.data.id);
       }
 
-      const res = await fetch(url, {
+      const res = await csrfFetch(url, {
         method: 'DELETE',
         headers: { 'Accept': 'application/json', 'X-CSRF-TOKEN': csrf },
         credentials: 'same-origin',

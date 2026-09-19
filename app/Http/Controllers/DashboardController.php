@@ -9,6 +9,7 @@ use App\Models\FeedFormula;
 use App\Models\FeedProduct;
 use App\Models\RawMaterial;
 use App\Models\Sale;
+use App\Models\StockAlert;
 use App\Models\User;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Schema;
@@ -57,7 +58,10 @@ class DashboardController extends Controller
             'feed_type',
             'price',
             'unit',
-            'status'
+            'status',
+            'quantity_bags',
+            'min_stock_bags',
+            'bag_weight_kg'
         )->orderBy('product_name')->get()->map(function ($f) {
             return [
                 'id' => $f->id,
@@ -79,6 +83,8 @@ class DashboardController extends Controller
                 'name' => $f->formula_name,
                 'feedProductId' => $f->feed_product_id,
                 'feedProductCode' => optional($f->feedProduct)->product_code,
+                'bagWeightKg' => (float) (optional($f->feedProduct)->bag_weight_kg ?? 25),
+                'batchSizeKg' => (float) ($f->batch_size_kg ?? 0),
                 'ingredients' => $f->items->map(function($it){
                     return [
                         'rawMaterialId' => $it->raw_material_id,
@@ -179,7 +185,7 @@ class DashboardController extends Controller
             return [
                 'id' => $s->id,
                 'customerId' => $s->customer_id,
-                'customerName' => optional($s->customer)->name ?? '',
+                'customerName' => optional($s->customer)->customer_name ?? optional($s->customer)->name ?? '',
                 'salesDate' => $s->sale_date ? \Carbon\Carbon::parse($s->sale_date)->format('Y-m-d') : null,
                 'feedProductId' => optional($firstItem)->feed_product_id,
                 'feedProductCode' => optional(optional($firstItem)->feedProduct)->product_code ?? '',
@@ -214,6 +220,8 @@ class DashboardController extends Controller
                 ];
             });
 
+        $analytics = $this->buildAnalytics($productionBatches, $distributions, $sales, $inventoryMovements, $rawMaterials, $feedProducts, $formulas);
+
         return Inertia::render('dashboard', [
             'rawMaterials' => $rawMaterials,
             'feedProducts' => $feedProducts,
@@ -225,6 +233,7 @@ class DashboardController extends Controller
             'distributions' => $distributions,
             'sales' => $sales,
             'inventoryMovements' => $inventoryMovements,
+            'analytics' => $analytics,
         ]);
     }
 
@@ -248,5 +257,89 @@ class DashboardController extends Controller
     public function analytics()
     {
         return redirect()->route('feedchain.dashboard', ['tab' => 'analytics']);
+    }
+
+    /** Build read-only analytics from persisted operational records. */
+    private function buildAnalytics($batches, $distributions, $sales, $movements, $rawMaterials, $feedProducts, $formulas): array
+    {
+        $completed = $batches->filter(fn ($batch) => strtolower((string) $batch['status']) === 'completed');
+        $monthKeys = collect($completed)->pluck('productionDate')->filter()->map(fn ($date) => substr($date, 0, 7))
+            ->merge($distributions->pluck('distributionDate')->filter()->map(fn ($date) => substr($date, 0, 7)))
+            ->merge($sales->pluck('salesDate')->filter()->map(fn ($date) => substr($date, 0, 7)))->unique()->sort()->values();
+
+        $shortages = StockAlert::query()->selectRaw("DATE_FORMAT(created_at, '%Y-%m') as month, COUNT(*) as total")
+            ->where('status', 'active')->groupBy('month')->pluck('total', 'month');
+        $trends = $monthKeys->map(function ($month) use ($completed, $distributions, $sales, $movements, $shortages) {
+            $monthBatches = $completed->filter(fn ($row) => str_starts_with((string) $row['productionDate'], $month));
+            $rawUsed = $monthBatches->sum('totalRawMaterialUsed');
+            $outputKg = $monthBatches->sum('quantityKg');
+            return [
+                'month' => $month,
+                'productionBags' => (float) $monthBatches->sum('quantityProducedBags'),
+                'distributionBags' => (float) $distributions->filter(fn ($row) => str_starts_with((string) $row['distributionDate'], $month))->sum('quantityBags'),
+                'salesRevenue' => (float) $sales->filter(fn ($row) => str_starts_with((string) $row['salesDate'], $month))->sum('totalAmount'),
+                // Inventory records are snapshots; this is the recorded availability for movements updated in the period.
+                'inventoryAvailable' => (float) $movements->filter(fn ($row) => str_starts_with((string) $row['date'], $month))->sum('quantityAvailable'),
+                'shortages' => (int) ($shortages[$month] ?? 0),
+                // Wastage is only reported when actual material consumption was recorded.
+                'wastageKg' => (float) max(0, $rawUsed - $outputKg),
+            ];
+        })->values();
+
+        $productionPareto = $completed->groupBy(fn ($row) => $row['feedProductName'] ?: $row['feedProductCode'] ?: 'Unassigned')
+            ->map(fn ($rows, $name) => ['name' => $name, 'value' => (float) $rows->sum('quantityProducedBags')])->values();
+        $salesPareto = $sales->filter(fn ($row) => strtolower((string) $row['status']) === 'completed')
+            ->groupBy(fn ($row) => $row['customerName'] ?: 'Unassigned customer')
+            ->map(fn ($rows, $name) => ['name' => $name, 'value' => (float) $rows->sum('totalAmount')])->values();
+
+        $rawAvailability = $rawMaterials->map(fn ($item) => $this->stockState((float) $item['quantity'], (float) $item['minStock']));
+        $feedAvailability = $feedProducts->map(fn ($item) => $this->stockState((float) $item['quantityBags'], (float) $item['minStockBags']));
+        $latestBatch = $completed->sortByDesc('productionDate')->first();
+        $latestFormula = $formulas->firstWhere('id', $latestBatch['formulaId'] ?? null) ?? $formulas->first();
+
+        return [
+            'trends' => $trends,
+            'kpis' => [
+                'completedBatches' => $completed->count(), 'totalBatches' => $batches->count(),
+                'rawMaterialKg' => (float) $rawMaterials->sum('quantity'), 'finishedFeedBags' => (float) $feedProducts->sum('quantityBags'),
+                'availability' => ['adequate' => $rawAvailability->merge($feedAvailability)->filter(fn ($s) => $s === 'adequate')->count(), 'low' => $rawAvailability->merge($feedAvailability)->filter(fn ($s) => $s === 'low')->count(), 'critical' => $rawAvailability->merge($feedAvailability)->filter(fn ($s) => $s === 'critical')->count(), 'out' => $rawAvailability->merge($feedAvailability)->filter(fn ($s) => $s === 'out')->count()],
+            ],
+            'productionPareto' => $this->pareto($productionPareto), 'salesPareto' => $this->pareto($salesPareto),
+            'forecast' => $this->multipleRegression($trends, $latestFormula, $rawMaterials),
+        ];
+    }
+
+    private function stockState(float $quantity, float $minimum): string
+    {
+        if ($quantity <= 0) return 'out';
+        if ($minimum > 0 && $quantity < $minimum * .5) return 'critical';
+        return $minimum > 0 && $quantity < $minimum ? 'low' : 'adequate';
+    }
+
+    private function pareto($items): array
+    {
+        $total = (float) $items->sum('value'); $cumulative = 0;
+        return $items->sortByDesc('value')->values()->map(function ($item) use ($total, &$cumulative) {
+            $percentage = $total > 0 ? ($item['value'] / $total) * 100 : 0; $cumulative += $percentage;
+            return $item + ['percentage' => round($percentage, 2), 'cumulativePercentage' => round($cumulative, 2)];
+        })->all();
+    }
+
+    private function multipleRegression($trends, $formula, $rawMaterials): array
+    {
+        $formula = $formula ?: [];
+        // OLS target: monthly production bags. Predictors: previous-month sales bags and production-period index.
+        $rows = $trends->values();
+        if ($rows->count() < 4) return ['available' => false, 'message' => 'At least four historical monthly periods with production activity are required for multiple linear regression.'];
+        $x = []; $y = [];
+        foreach ($rows as $index => $row) { $x[] = [1, $index ? (float) $rows[$index - 1]['salesRevenue'] : 0, $index + 1]; $y[] = (float) $row['productionBags']; }
+        $a = [[0,0,0],[0,0,0],[0,0,0]]; $b = [0,0,0];
+        foreach ($x as $i => $row) foreach ($row as $j => $value) { $b[$j] += $value * $y[$i]; foreach ($row as $k => $other) $a[$j][$k] += $value * $other; }
+        for ($i=0; $i<3; $i++) { $pivot = $a[$i][$i]; if (abs($pivot) < 0.000001) return ['available' => false, 'message' => 'Historical records do not contain enough variation to fit a stable multiple linear regression model.']; for ($j=$i; $j<3; $j++) $a[$i][$j] /= $pivot; $b[$i] /= $pivot; for ($r=0; $r<3; $r++) if ($r !== $i) { $factor=$a[$r][$i]; for ($j=$i; $j<3; $j++) $a[$r][$j]-=$factor*$a[$i][$j]; $b[$r]-=$factor*$b[$i]; } }
+        $forecastBags = max(0, $b[0] + $b[1] * (float) $rows->last()['salesRevenue'] + $b[2] * ($rows->count()+1));
+        $bagWeight = (float) ($formula['bagWeightKg'] ?? 25);
+        $forecastKg = $forecastBags * $bagWeight; $batchSize = (float) ($formula['batchSizeKg'] ?? 0);
+        $materials = collect($formula['ingredients'] ?? [])->map(function ($ingredient) use ($batchSize, $forecastKg, $rawMaterials) { $material = $rawMaterials->firstWhere('id', $ingredient['rawMaterialId']); $inclusion = $batchSize > 0 ? ((float) $ingredient['quantityKg'] / $batchSize) * 100 : null; return ['name' => $material['name'] ?? $ingredient['rawMaterialCode'], 'inclusionPercentage' => $inclusion, 'requiredKg' => $batchSize > 0 ? round($forecastKg * ((float) $ingredient['quantityKg'] / $batchSize), 3) : null]; })->values();
+        return ['available' => true, 'target' => 'Monthly production quantity (bags)', 'predictors' => ['Previous-month sales revenue', 'Production-period index'], 'historicalPeriods' => $rows->count(), 'forecastBags' => round($forecastBags, 2), 'forecastKg' => round($forecastKg, 2), 'formulaName' => $formula['name'] ?? null, 'materials' => $materials];
     }
 }

@@ -1,4 +1,5 @@
 import React, { useState } from "react";
+import { csrfFetch } from "../lib/csrf-fetch";
 import { User, BuyerProfile, DistributionRecord, FeedProduct } from "../types";
 import { 
   Search, Plus, Edit2, Trash2, ShieldAlert, AlertTriangle, 
@@ -98,7 +99,7 @@ export default function DistributionModule({
     try {
       const csrf = document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || '';
       const payload = { buyer_name: buyerName, fishpond_or_cage_name: buyerCage, address: buyerAddress, contact_number: buyerPhone };
-      const response = await fetch(editItem ? route('buyers.update', editItem.id) : route('buyers.store'), {
+      const response = await csrfFetch(editItem ? route('buyers.update', editItem.id) : route('buyers.store'), {
         method: editItem ? 'PUT' : 'POST',
         headers: { 'Content-Type': 'application/json', 'Accept': 'application/json', 'X-CSRF-TOKEN': csrf },
         body: JSON.stringify(payload),
@@ -137,7 +138,7 @@ export default function DistributionModule({
 
     try {
       const csrf = document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || '';
-      const response = await fetch(route('distributions.store'), {
+      const response = await csrfFetch(route('distributions.store'), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', 'Accept': 'application/json', 'X-CSRF-TOKEN': csrf },
         body: JSON.stringify({ buyer_id: distBuyerId, distribution_date: distDate, feed_product_id: selectedProduct.id, quantity: distQtyBags, remarks: distRemarks }),

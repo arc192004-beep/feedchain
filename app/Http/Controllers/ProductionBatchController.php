@@ -54,6 +54,16 @@ class ProductionBatchController extends Controller
 
     public function store(Request $request)
     {
+        if ($request->has('batch_no') && ! $request->has('batch_number')) {
+            $request->merge(['batch_number' => $request->input('batch_no')]);
+        }
+        if ($request->has('feed_formulation_id') && ! $request->has('feed_formula_id')) {
+            $request->merge(['feed_formula_id' => $request->input('feed_formulation_id')]);
+        }
+        if (! $request->has('status')) {
+            $request->merge(['status' => 'completed']);
+        }
+
         $data = $request->validate([
             'batch_number' => 'required|string|max:50|unique:production_batches,batch_number',
             'feed_product_id' => 'required|exists:feed_products,id',
@@ -84,7 +94,7 @@ class ProductionBatchController extends Controller
                 'total_sacks' => $data['sacks_produced'],
                 'status' => strtolower($data['status']),
                 'notes' => $data['notes'] ?? null,
-                'encoded_by' => $request->user()->id,
+                'encoded_by' => $request->user()?->id,
                 'started_at' => in_array($data['status'], ['in_progress', 'completed']) ? now() : null,
                 'completed_at' => $data['status'] === 'completed' ? now() : null,
             ]);
@@ -123,6 +133,13 @@ class ProductionBatchController extends Controller
 
     public function update(Request $request, ProductionBatch $production_batch)
     {
+        if ($request->has('batch_no') && ! $request->has('batch_number')) {
+            $request->merge(['batch_number' => $request->input('batch_no')]);
+        }
+        if ($request->has('feed_formulation_id') && ! $request->has('feed_formula_id')) {
+            $request->merge(['feed_formula_id' => $request->input('feed_formulation_id')]);
+        }
+
         $data = $request->validate([
             'batch_number' => 'required|string|max:50|unique:production_batches,batch_number,' . $production_batch->id,
             'feed_product_id' => 'required|exists:feed_products,id',
@@ -135,6 +152,8 @@ class ProductionBatchController extends Controller
         ]);
 
         DB::transaction(function () use ($data, $production_batch) {
+            // Lock the batch itself so two completion requests cannot both add stock.
+            $production_batch = ProductionBatch::lockForUpdate()->findOrFail($production_batch->id);
             $prevStatus = strtolower($production_batch->status ?? 'planned');
             $newStatus = strtolower($data['status']);
 
@@ -145,23 +164,19 @@ class ProductionBatchController extends Controller
                 ? (float) $data['quantity_kg']
                 : (float) ($data['sacks_produced'] * $bagWeight);
 
-            // Case 1: Was completed, but now moving to planned, in_progress, or cancelled -> Reverse inventory
-            if ($prevStatus === 'completed' && $newStatus !== 'completed') {
+            $inventoryChanged = (int) $production_batch->feed_product_id !== (int) $data['feed_product_id']
+                || (int) $production_batch->feed_formula_id !== (int) $data['feed_formula_id']
+                || (int) $production_batch->sacks_produced !== (int) $data['sacks_produced']
+                || (float) $production_batch->quantity_kg !== $totalOutputKg;
+
+            // Reverse only a batch that has actually been applied. Saving an unchanged
+            // completed batch is intentionally a no-op for stock and movements.
+            if ($prevStatus === 'completed' && $production_batch->inventory_applied_at && ($newStatus !== 'completed' || $inventoryChanged)) {
                 $this->reverseBatchInventory($production_batch);
                 $production_batch->total_raw_material_used = 0;
+                $production_batch->production_yield = null;
                 $production_batch->completed_at = null;
-            }
-
-            // Case 2: Was completed, and remains completed, but parameters changed -> Reverse and re-apply
-            elseif ($prevStatus === 'completed' && $newStatus === 'completed') {
-                $this->reverseBatchInventory($production_batch);
-                $this->completeProductionBatch($production_batch, $formula, $product, $totalOutputKg, $data['sacks_produced']);
-            }
-
-            // Case 3: Was not completed, and now transitioned to completed -> Apply completion
-            elseif ($prevStatus !== 'completed' && $newStatus === 'completed') {
-                $this->completeProductionBatch($production_batch, $formula, $product, $totalOutputKg, $data['sacks_produced']);
-                $production_batch->completed_at = now();
+                $production_batch->inventory_applied_at = null;
             }
 
             if ($newStatus === 'in_progress' && !$production_batch->started_at) {
@@ -179,7 +194,15 @@ class ProductionBatchController extends Controller
                 'total_sacks' => $data['sacks_produced'],
                 'status' => $newStatus,
                 'notes' => $data['notes'] ?? null,
+                'completed_at' => $newStatus === 'completed' ? ($production_batch->completed_at ?? now()) : null,
             ]);
+
+            // Apply only once after the current batch values have been saved. A retry,
+            // page refresh, or an edit that changes only notes cannot duplicate stock.
+            if ($newStatus === 'completed' && ! $production_batch->fresh()->inventory_applied_at) {
+                $current = $production_batch->fresh();
+                $this->completeProductionBatch($current, $formula, $product, $totalOutputKg, $data['sacks_produced']);
+            }
         });
 
         if ($request->wantsJson() || $request->expectsJson()) {
@@ -225,6 +248,7 @@ class ProductionBatchController extends Controller
         float $totalOutputKg,
         int $sacksProduced
     ): void {
+        abort_if($batch->inventory_applied_at, 422, "Inventory has already been applied for batch {$batch->batch_number}.");
         $items = FormulaItem::where('feed_formula_id', $formula->id)->get();
         abort_if($items->isEmpty(), 422, 'The linked formulation has no ingredient lines.');
 
@@ -277,9 +301,13 @@ class ProductionBatchController extends Controller
 
             Inventory::create([
                 'inventory_type' => 'raw_material',
+                'movement_type' => 'Production',
                 'raw_material_id' => $rm->id,
                 'reference_batch_id' => $batch->id,
+                'reference_number' => $batch->batch_number,
+                'user_id' => $batch->encoded_by,
                 'quantity' => -$qtyUsed,
+                'quantity_kg' => -$qtyUsed,
                 'quantity_available' => $newOnHand,
                 'unit' => $rm->unit ?: 'kg',
                 'last_updated' => now(),
@@ -308,17 +336,24 @@ class ProductionBatchController extends Controller
 
         Inventory::create([
             'inventory_type' => 'finished_product',
+            'movement_type' => 'Production',
             'feed_product_id' => $lockedProduct->id,
             'reference_batch_id' => $batch->id,
+            'reference_number' => $batch->batch_number,
+            'user_id' => $batch->encoded_by,
             'quantity' => $sacksProduced,
+            'quantity_kg' => $totalOutputKg,
             'quantity_available' => $newProductBags,
             'unit' => 'bag',
             'last_updated' => now(),
         ]);
 
         // 4. Record yield and totals
-        $batch->total_raw_material_used = $totalRawUsed;
-        $batch->save();
+        $batch->update([
+            'total_raw_material_used' => $totalRawUsed,
+            'production_yield' => $totalRawUsed > 0 ? round(($totalOutputKg / $totalRawUsed) * 100, 2) : 100.00,
+            'inventory_applied_at' => now(),
+        ]);
     }
 
     /**
@@ -344,9 +379,13 @@ class ProductionBatchController extends Controller
 
                 Inventory::create([
                     'inventory_type' => 'raw_material',
+                    'movement_type' => 'Production Reversal',
                     'raw_material_id' => $rm->id,
                     'reference_batch_id' => $batch->id,
+                    'reference_number' => $batch->batch_number,
+                    'user_id' => $batch->encoded_by,
                     'quantity' => $qty,
+                    'quantity_kg' => $qty,
                     'quantity_available' => $newOnHand,
                     'unit' => $material->unit ?: $rm->unit ?: 'kg',
                     'last_updated' => now(),
@@ -372,9 +411,13 @@ class ProductionBatchController extends Controller
 
                 Inventory::create([
                     'inventory_type' => 'finished_product',
+                    'movement_type' => 'Production Reversal',
                     'feed_product_id' => $lockedProduct->id,
                     'reference_batch_id' => $batch->id,
+                    'reference_number' => $batch->batch_number,
+                    'user_id' => $batch->encoded_by,
                     'quantity' => -$bags,
+                    'quantity_kg' => -(float) ($batch->quantity_kg ?? 0),
                     'quantity_available' => $newProductBags,
                     'unit' => 'bag',
                     'last_updated' => now(),
@@ -383,5 +426,6 @@ class ProductionBatchController extends Controller
         }
 
         $batch->materials()->delete();
+        $batch->update(['inventory_applied_at' => null]);
     }
 }

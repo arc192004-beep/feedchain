@@ -1,5 +1,6 @@
 import React, { useState } from "react";
 import { User, RawMaterial, FeedProduct } from "../types";
+import { csrfFetch } from "../lib/csrf-fetch";
 import { 
   Package, TrendingUp, AlertTriangle, RefreshCw, 
   Settings, CheckCircle2, Search, ArrowUpRight, ArrowDownRight 
@@ -61,7 +62,7 @@ export default function InventoryModule({
       return;
     }
     try {
-      const response = await fetch('/inventory', {
+      const response = await csrfFetch('/inventory', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', 'Accept': 'application/json', 'X-CSRF-TOKEN': document.querySelector<HTMLMetaElement>('meta[name="csrf-token"]')?.content ?? '' },
         body: JSON.stringify({ item_type: adjustItemType === 'Raw' ? 'raw_material' : 'finished_product', item_id: target.id, quantity: adjustQty, remarks: adjustRemarks }),
