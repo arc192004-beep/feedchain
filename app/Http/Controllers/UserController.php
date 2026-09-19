@@ -2,8 +2,8 @@
 
 namespace App\Http\Controllers;
 
-use App\Models\User;
 use App\Models\ActivityLog;
+use App\Models\User;
 use Illuminate\Http\Request;
 
 class UserController extends Controller
@@ -15,7 +15,7 @@ class UserController extends Controller
 
     public function index(Request $request)
     {
-        $query = User::query();
+        $query = User::query()->where('workspace_id', $this->workspaceId());
 
         if ($search = $request->get('q')) {
             $query->where(function ($q) use ($search) {
@@ -45,6 +45,10 @@ class UserController extends Controller
             'status' => 'required|in:active,inactive',
         ]);
 
+        // Accounts created by a Super Admin always inherit the creator's
+        // workspace; the workspace is never taken from request input.
+        $data['workspace_id'] = $this->workspaceId();
+
         $user = User::create($data);
         $this->log('create_account', "Created account {$user->username} with role {$user->role}");
 
@@ -53,24 +57,33 @@ class UserController extends Controller
 
     public function show(User $user)
     {
+        $this->ensureSameWorkspace($user);
+
         return view('users.show', compact('user'));
     }
 
     public function edit(User $user)
     {
+        $this->ensureSameWorkspace($user);
+
         return view('users.edit', compact('user'));
     }
 
     public function update(Request $request, User $user)
     {
+        $this->ensureSameWorkspace($user);
+
         $data = $request->validate([
             'name' => 'required|string|max:255',
-            'username' => 'required|string|max:50|unique:users,username,' . $user->id,
-            'email' => 'required|email|unique:users,email,' . $user->id,
+            'username' => 'required|string|max:50|unique:users,username,'.$user->id,
+            'email' => 'required|email|unique:users,email,'.$user->id,
             'password' => 'nullable|string|min:6|confirmed',
             'role' => 'required|in:super_admin,production_manager,administrator',
             'status' => 'required|in:active,inactive',
         ]);
+
+        // A user can never be moved between workspaces.
+        unset($data['workspace_id']);
 
         if (empty($data['password'])) {
             unset($data['password']);
@@ -87,6 +100,8 @@ class UserController extends Controller
 
     public function destroy(User $user)
     {
+        $this->ensureSameWorkspace($user);
+
         if ($user->id === auth()->id()) {
             return back()->with('error', 'You cannot delete your own account.');
         }
@@ -99,13 +114,36 @@ class UserController extends Controller
         return redirect()->route('users.index')->with('success', 'User deleted successfully.');
     }
 
+    private function workspaceId(): ?int
+    {
+        return auth()->user()?->workspace_id;
+    }
+
+    /**
+     * Reject access to accounts outside the authenticated user's workspace.
+     */
+    private function ensureSameWorkspace(User $user): void
+    {
+        if ($user->workspace_id !== $this->workspaceId()) {
+            abort(404);
+        }
+    }
+
     private function ensureFinalSuperAdminRemainsActive(User $user, array $changes): void
     {
-        if ($user->role !== 'super_admin') return;
+        if ($user->role !== 'super_admin') {
+            return;
+        }
         $remainsActiveSuperAdmin = ($changes['role'] ?? 'super_admin') === 'super_admin'
             && ($changes['status'] ?? 'active') === 'active';
-        if ($remainsActiveSuperAdmin) return;
-        if (User::where('role', 'super_admin')->where('status', 'active')->count() <= 1) {
+        if ($remainsActiveSuperAdmin) {
+            return;
+        }
+        $activeSuperAdmins = User::where('role', 'super_admin')
+            ->where('status', 'active')
+            ->where('workspace_id', $this->workspaceId())
+            ->count();
+        if ($activeSuperAdmins <= 1) {
             abort(422, 'The final active Super Administrator cannot be deactivated, reassigned, or deleted.');
         }
     }

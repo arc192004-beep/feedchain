@@ -15,8 +15,11 @@ return new class extends Migration
             });
         }
 
-        // Backfill unit from raw_materials for any existing records
-        if (Schema::hasTable('production_batch_materials') && Schema::hasTable('raw_materials')) {
+        // Backfill unit from raw_materials for any existing records. The legacy
+        // database is MySQL; the JOIN form is skipped on other drivers where the
+        // schema starts empty anyway.
+        if (Schema::hasTable('production_batch_materials') && Schema::hasTable('raw_materials')
+            && DB::connection()->getDriverName() === 'mysql') {
             DB::statement("
                 UPDATE production_batch_materials pbm
                 JOIN raw_materials rm ON rm.id = pbm.raw_material_id

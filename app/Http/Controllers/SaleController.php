@@ -95,12 +95,12 @@ class SaleController extends Controller
     private function saveSale(Request $request, ?Sale $sale): Sale
     {
         $data = $request->validate([
-            'customer_id' => 'required|exists:customers,id',
+            'customer_id' => ['required', $this->workspaceExists('customers')],
             'sale_date' => 'required|date',
             'status' => 'nullable|in:completed,pending,cancelled',
             'notes' => 'nullable|string|max:1000',
             'items' => 'required|array|min:1',
-            'items.*.feed_product_id' => 'required|exists:feed_products,id',
+            'items.*.feed_product_id' => ['required', $this->workspaceExists('feed_products')],
             'items.*.quantity' => 'required|numeric|min:1',
             'items.*.unit_price' => 'required|numeric|min:0',
         ]);
@@ -142,12 +142,21 @@ class SaleController extends Controller
         $sale->fill([
             'customer_id' => $data['customer_id'],
             'sale_date' => $data['sale_date'],
+            'sales_date' => $data['sale_date'],
             'total_amount' => $totalAmount,
             'status' => $data['status'] ?? 'completed',
             'notes' => $data['notes'] ?? null,
             'feed_product_id' => $data['items'][0]['feed_product_id'],
             'quantity' => $totalQuantity,
-        ])->save();
+        ]);
+
+        if (! $sale->exists) {
+            // `sales_number` is uniquely indexed, so include the workspace to
+            // keep two workspaces from generating the same value.
+            $sale->sales_number = 'SALE-'.auth()->user()?->workspace_id.'-' . str_pad((string) (Sale::max('id') + 1), 4, '0', STR_PAD_LEFT);
+        }
+
+        $sale->save();
 
         // Apply deductions and record items
         foreach ($data['items'] as $itemData) {

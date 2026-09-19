@@ -29,7 +29,7 @@ class BatchSettingController extends Controller
     {
         $data = $request->validate([
             'setting_name' => 'required',
-            'feed_product_id' => 'nullable|exists:feed_products,id',
+            'feed_product_id' => ['nullable', $this->workspaceExists('feed_products')],
             'standard_batch_kg' => 'required|numeric',
             'sacks_per_batch' => 'nullable|integer',
         ]);
@@ -48,7 +48,7 @@ class BatchSettingController extends Controller
     {
         $data = $request->validate([
             'setting_name' => 'required',
-            'feed_product_id' => 'nullable|exists:feed_products,id',
+            'feed_product_id' => ['nullable', $this->workspaceExists('feed_products')],
             'standard_batch_kg' => 'required|numeric',
             'sacks_per_batch' => 'nullable|integer',
         ]);

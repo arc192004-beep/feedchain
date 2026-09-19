@@ -20,10 +20,15 @@ return new class extends Migration {
             if (! Schema::hasColumn('production_batches', 'production_yield')) $table->decimal('production_yield', 8, 2)->nullable()->after('total_raw_material_used');
         });
 
-        // Existing completed batches with a finished-goods movement have already
-        // affected stock; mark them to prevent a later edit from adding them again.
-        DB::statement("UPDATE production_batches pb SET inventory_applied_at = COALESCE(inventory_applied_at, completed_at, updated_at) WHERE status = 'completed' AND EXISTS (SELECT 1 FROM inventories i WHERE i.reference_batch_id = pb.id AND i.inventory_type = 'finished_product' AND i.quantity > 0)");
-        DB::statement("UPDATE production_batches SET production_yield = CASE WHEN total_raw_material_used > 0 THEN ROUND((quantity_kg / total_raw_material_used) * 100, 2) ELSE 100.00 END WHERE production_yield IS NULL AND status = 'completed'");
+        // The alias/EXISTS form and the JOIN-based backfills below target the legacy
+        // MySQL database; skipping them elsewhere keeps fresh installs working.
+        if (DB::connection()->getDriverName() === 'mysql') {
+            DB::statement("UPDATE production_batches pb SET inventory_applied_at = COALESCE(inventory_applied_at, completed_at, updated_at) WHERE status = 'completed' AND EXISTS (SELECT 1 FROM inventories i WHERE i.reference_batch_id = pb.id AND i.inventory_type = 'finished_product' AND i.quantity > 0)");
+        }
+
+        if (Schema::hasColumn('production_batches', 'completed_at') && Schema::hasColumn('production_batches', 'total_raw_material_used')) {
+            DB::statement("UPDATE production_batches SET production_yield = CASE WHEN total_raw_material_used > 0 THEN ROUND((quantity_kg / total_raw_material_used) * 100, 2) ELSE 100.00 END WHERE production_yield IS NULL AND status = 'completed'");
+        }
     }
 
     public function down(): void

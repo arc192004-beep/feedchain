@@ -28,7 +28,7 @@ class WastageRecordController extends Controller
     public function store(Request $request)
     {
         $data = $request->validate([
-            'raw_material_id' => 'nullable|exists:raw_materials,id',
+            'raw_material_id' => ['nullable', $this->workspaceExists('raw_materials')],
             'wastage_type' => 'required',
             'quantity' => 'required|numeric',
             'date_recorded' => 'required|date',

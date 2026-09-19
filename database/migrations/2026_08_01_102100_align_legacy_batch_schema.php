@@ -60,21 +60,29 @@ return new class extends Migration
             }
         });
 
-        DB::table('production_batches')
-            ->where('quantity_kg', 0)
-            ->update(['quantity_kg' => DB::raw('quantity_produced')]);
+        if (Schema::hasColumn('production_batches', 'quantity_produced')) {
+            DB::table('production_batches')
+                ->where('quantity_kg', 0)
+                ->update(['quantity_kg' => DB::raw('quantity_produced')]);
+        }
 
-        DB::table('production_batches')
-            ->where('sacks_produced', 0)
-            ->update(['sacks_produced' => DB::raw('total_sacks')]);
+        if (Schema::hasColumn('production_batches', 'total_sacks')) {
+            DB::table('production_batches')
+                ->where('sacks_produced', 0)
+                ->update(['sacks_produced' => DB::raw('total_sacks')]);
+        }
 
-        DB::table('feed_formulas')
-            ->whereNull('formula_name')
-            ->update(['formula_name' => DB::raw('name')]);
+        if (Schema::hasColumn('feed_formulas', 'name')) {
+            DB::table('feed_formulas')
+                ->whereNull('formula_name')
+                ->update(['formula_name' => DB::raw('name')]);
+        }
 
-        DB::table('feed_formulas')
-            ->where('batch_size_kg', 1000)
-            ->update(['batch_size_kg' => DB::raw('batch_size')]);
+        if (Schema::hasColumn('feed_formulas', 'batch_size')) {
+            DB::table('feed_formulas')
+                ->where('batch_size_kg', 1000)
+                ->update(['batch_size_kg' => DB::raw('batch_size')]);
+        }
     }
 
     public function down(): void

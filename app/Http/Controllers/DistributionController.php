@@ -44,6 +44,11 @@ class DistributionController extends Controller
         return view('distributions.index', compact('items'));
     }
 
+    private function workspaceId(): ?int
+    {
+        return auth()->user()?->workspace_id;
+    }
+
     public function create()
     {
         return view('distributions.create', ['buyers' => Buyer::all(), 'products' => FeedProduct::all()]);
@@ -52,9 +57,9 @@ class DistributionController extends Controller
     public function store(Request $request)
     {
         $data = $request->validate([
-            'buyer_id' => 'required|exists:buyers,id',
+            'buyer_id' => ['required', $this->workspaceExists('buyers')],
             'distribution_date' => 'required|date',
-            'feed_product_id' => 'required|exists:feed_products,id',
+            'feed_product_id' => ['required', $this->workspaceExists('feed_products')],
             'quantity' => 'required|numeric|min:1',
             'remarks' => 'nullable|string|max:1000',
         ]);
@@ -70,7 +75,9 @@ class DistributionController extends Controller
                 "Insufficient finished feed stock: only {$product->quantity_bags} bags of '{$product->product_name}' available in the warehouse, but {$requestedQty} bags requested."
             );
 
-            $number = 'DIST-' . now()->format('Ymd') . '-' . str_pad((string) (Distribution::max('id') + 1), 4, '0', STR_PAD_LEFT);
+            // Distribution numbers are globally unique; include the workspace so two
+            // workspaces cannot collide on the same value.
+            $number = 'DIST-'.$this->workspaceId().'-' . now()->format('Ymd') . '-' . str_pad((string) (Distribution::max('id') + 1), 4, '0', STR_PAD_LEFT);
             $amount = (float) $product->price * $requestedQty;
 
             $distribution = Distribution::create([
@@ -143,9 +150,9 @@ class DistributionController extends Controller
     public function update(Request $request, Distribution $distribution)
     {
         $data = $request->validate([
-            'buyer_id' => 'required|exists:buyers,id',
+            'buyer_id' => ['required', $this->workspaceExists('buyers')],
             'distribution_date' => 'required|date',
-            'feed_product_id' => 'required|exists:feed_products,id',
+            'feed_product_id' => ['required', $this->workspaceExists('feed_products')],
             'quantity' => 'required|numeric|min:1',
             'remarks' => 'nullable|string|max:1000',
         ]);
