@@ -4,10 +4,11 @@ namespace App\Models;
 
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
+use App\Models\Concerns\BelongsToWorkspace;
 
 class FeedFormulation extends Model
 {
-    use HasFactory;
+    use HasFactory, BelongsToWorkspace;
 
     protected $fillable = [
         'feed_product_id',

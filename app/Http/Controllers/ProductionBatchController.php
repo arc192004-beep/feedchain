@@ -66,8 +66,8 @@ class ProductionBatchController extends Controller
 
         $data = $request->validate([
             'batch_number' => 'required|string|max:50|unique:production_batches,batch_number',
-            'feed_product_id' => 'required|exists:feed_products,id',
-            'feed_formula_id' => 'required|exists:feed_formulas,id',
+            'feed_product_id' => ['required', $this->workspaceExists('feed_products')],
+            'feed_formula_id' => ['required', $this->workspaceExists('feed_formulas')],
             'production_date' => 'required|date',
             'quantity_kg' => 'nullable|numeric|min:0',
             'sacks_produced' => 'required|integer|min:1',
@@ -142,8 +142,8 @@ class ProductionBatchController extends Controller
 
         $data = $request->validate([
             'batch_number' => 'required|string|max:50|unique:production_batches,batch_number,' . $production_batch->id,
-            'feed_product_id' => 'required|exists:feed_products,id',
-            'feed_formula_id' => 'required|exists:feed_formulas,id',
+            'feed_product_id' => ['required', $this->workspaceExists('feed_products')],
+            'feed_formula_id' => ['required', $this->workspaceExists('feed_formulas')],
             'production_date' => 'required|date',
             'quantity_kg' => 'nullable|numeric|min:0',
             'sacks_produced' => 'required|integer|min:1',

@@ -2,12 +2,13 @@
 
 namespace App\Models;
 
+use App\Models\Concerns\BelongsToWorkspace;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 
 class Distribution extends Model
 {
-    use HasFactory;
+    use BelongsToWorkspace, HasFactory;
 
     protected $table = 'distributions';
 
@@ -25,6 +26,8 @@ class Distribution extends Model
         'remarks',
         'status',
         'encoded_by',
+        'transaction_number',
+        'user_id',
     ];
 
     protected $dates = ['distribution_date'];

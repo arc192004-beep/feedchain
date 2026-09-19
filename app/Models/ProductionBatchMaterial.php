@@ -4,10 +4,11 @@ namespace App\Models;
 
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
+use App\Models\Concerns\BelongsToWorkspace;
 
 class ProductionBatchMaterial extends Model
 {
-    use HasFactory;
+    use HasFactory, BelongsToWorkspace;
 
     protected $table = 'production_batch_materials';
 

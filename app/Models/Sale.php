@@ -2,21 +2,26 @@
 
 namespace App\Models;
 
+use App\Models\Concerns\BelongsToWorkspace;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 
 class Sale extends Model
 {
-    use HasFactory;
+    use BelongsToWorkspace, HasFactory;
 
     protected $fillable = [
         'customer_id',
         'sale_date',
+        'sales_date',
+        'sales_number',
+        'customer_name',
         'total_amount',
         'feed_product_id',
         'quantity',
         'status',
         'notes',
+        'encoded_by',
     ];
 
     public function customer()

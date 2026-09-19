@@ -33,6 +33,11 @@ class BuyerController extends Controller
         return view('buyers.index', compact('items'));
     }
 
+    private function workspaceId(): ?int
+    {
+        return auth()->user()?->workspace_id;
+    }
+
     public function create()
     {
         return view('buyers.create');
@@ -48,7 +53,9 @@ class BuyerController extends Controller
             'contact_person' => 'nullable|string|max:255',
         ]);
 
-        $data['buyer_code'] = 'BUYER-' . str_pad((string) (Buyer::max('id') + 1), 4, '0', STR_PAD_LEFT);
+        // Codes are globally unique, so include the workspace to keep two
+        // workspaces from generating the same value.
+        $data['buyer_code'] = 'BUYER-'.$this->workspaceId().'-' . str_pad((string) (Buyer::max('id') + 1), 4, '0', STR_PAD_LEFT);
         $buyer = Buyer::create($data);
 
         if ($request->wantsJson() || $request->expectsJson()) {

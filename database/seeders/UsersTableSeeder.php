@@ -3,6 +3,7 @@
 namespace Database\Seeders;
 
 use App\Models\User;
+use App\Models\Workspace;
 use Illuminate\Database\Seeder;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\DB;
@@ -11,6 +12,10 @@ class UsersTableSeeder extends Seeder
 {
     public function run(): void
     {
+        $workspace = Workspace::firstOrCreate(
+            ['name' => 'Default Workspace'],
+        );
+
         $users = [
             ['email' => 'superadmin@example.com', 'name' => 'Super Administrator', 'username' => 'superadmin', 'password' => 'password', 'role' => 'super_admin'],
             ['email' => 'pm@example.com', 'name' => 'Production Manager', 'username' => 'pm', 'password' => 'password', 'role' => 'production_manager'],
@@ -20,7 +25,7 @@ class UsersTableSeeder extends Seeder
         foreach ($users as $u) {
             $username = $this->makeUniqueUsername($u['username'], $u['email']);
 
-            User::updateOrCreate(
+            $user = User::updateOrCreate(
                 ['email' => $u['email']],
                 [
                     'name' => $u['name'],
@@ -28,8 +33,13 @@ class UsersTableSeeder extends Seeder
                     'password' => Hash::make($u['password']),
                     'role' => $u['role'],
                     'status' => 'active',
+                    'workspace_id' => $workspace->id,
                 ]
             );
+
+            if ($user->role === 'super_admin' && ! $workspace->owner_id) {
+                $workspace->update(['owner_id' => $user->id]);
+            }
         }
     }
 

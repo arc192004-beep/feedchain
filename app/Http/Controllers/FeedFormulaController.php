@@ -50,11 +50,11 @@ class FeedFormulaController extends Controller
         $data = $request->validate([
             'formula_code' => 'required|string|max:50|unique:feed_formulas,formula_code',
             'formula_name' => 'required|string|max:255',
-            'feed_product_id' => 'required|exists:feed_products,id',
+            'feed_product_id' => ['required', $this->workspaceExists('feed_products')],
             'batch_size_kg' => 'nullable|numeric|min:0.001',
             'status' => 'required|in:active,inactive',
             'items' => 'required|array|min:1',
-            'items.*.raw_material_id' => 'required|exists:raw_materials,id',
+            'items.*.raw_material_id' => ['required', $this->workspaceExists('raw_materials')],
             'items.*.quantity_required' => 'required|numeric|min:0.001',
             'items.*.unit' => 'nullable|string|max:20',
         ]);
@@ -136,11 +136,11 @@ class FeedFormulaController extends Controller
         $data = $request->validate([
             'formula_code' => 'required|string|max:50|unique:feed_formulas,formula_code,' . $feed_formula->id,
             'formula_name' => 'required|string|max:255',
-            'feed_product_id' => 'required|exists:feed_products,id',
+            'feed_product_id' => ['required', $this->workspaceExists('feed_products')],
             'batch_size_kg' => 'nullable|numeric|min:0.001',
             'status' => 'required|in:active,inactive',
             'items' => 'required|array|min:1',
-            'items.*.raw_material_id' => 'required|exists:raw_materials,id',
+            'items.*.raw_material_id' => ['required', $this->workspaceExists('raw_materials')],
             'items.*.quantity_required' => 'required|numeric|min:0.001',
             'items.*.unit' => 'nullable|string|max:20',
         ]);

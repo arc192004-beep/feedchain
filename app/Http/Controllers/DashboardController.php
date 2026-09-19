@@ -127,7 +127,7 @@ class DashboardController extends Controller
             ];
         });
 
-        $users = User::orderBy('name')->get()->map(function ($u) {
+        $users = User::where('workspace_id', $request->user()->workspace_id)->orderBy('name')->get()->map(function ($u) {
             return [
                 'id' => $u->id,
                 'name' => $u->name,
@@ -239,7 +239,9 @@ class DashboardController extends Controller
 
     public function superAdmin()
     {
-        $users = User::orderByDesc('id')->get(['id', 'name', 'username', 'email', 'role', 'status', 'created_at']);
+        $users = User::where('workspace_id', auth()->user()->workspace_id)
+            ->orderByDesc('id')
+            ->get(['id', 'name', 'username', 'email', 'role', 'status', 'created_at']);
         $activities = \App\Models\ActivityLog::with('user:id,name,role')->latest()->limit(10)->get();
 
         return Inertia::render('super-admin/dashboard', [

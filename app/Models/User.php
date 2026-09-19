@@ -17,6 +17,7 @@ class User extends Authenticatable
         'password',
         'role',
         'status',
+        'workspace_id',
     ];
 
     protected $hidden = [
@@ -48,6 +49,26 @@ class User extends Authenticatable
     public function activityLogs()
     {
         return $this->hasMany(ActivityLog::class);
+    }
+
+    // Workspace / tenant ownership
+    public function workspace()
+    {
+        return $this->belongsTo(Workspace::class);
+    }
+
+    public function ownsWorkspace(): bool
+    {
+        return $this->workspace_id !== null
+            && $this->workspace?->owner_id === $this->id;
+    }
+
+    /**
+     * Users from the same workspace, including the current user.
+     */
+    public function scopeInWorkspace($query, ?int $workspaceId)
+    {
+        return $query->where('workspace_id', $workspaceId);
     }
 
     // Role check helpers
