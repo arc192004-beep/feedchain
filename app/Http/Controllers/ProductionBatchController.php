@@ -65,7 +65,7 @@ class ProductionBatchController extends Controller
         }
 
         $data = $request->validate([
-            'batch_number' => 'required|string|max:50|unique:production_batches,batch_number',
+            'batch_number' => ['required', 'string', 'max:50', $this->workspaceUnique('production_batches', 'batch_number')],
             'feed_product_id' => ['required', $this->workspaceExists('feed_products')],
             'feed_formula_id' => ['required', $this->workspaceExists('feed_formulas')],
             'production_date' => 'required|date',
@@ -141,7 +141,7 @@ class ProductionBatchController extends Controller
         }
 
         $data = $request->validate([
-            'batch_number' => 'required|string|max:50|unique:production_batches,batch_number,' . $production_batch->id,
+            'batch_number' => ['required', 'string', 'max:50', $this->workspaceUnique('production_batches', 'batch_number', $production_batch->id)],
             'feed_product_id' => ['required', $this->workspaceExists('feed_products')],
             'feed_formula_id' => ['required', $this->workspaceExists('feed_formulas')],
             'production_date' => 'required|date',
