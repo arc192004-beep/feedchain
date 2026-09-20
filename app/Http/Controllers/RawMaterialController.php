@@ -53,7 +53,7 @@ class RawMaterialController extends Controller
     public function store(Request $request)
     {
         $data = $request->validate([
-            'material_code' => 'required|string|max:50|unique:raw_materials,material_code',
+            'material_code' => ['required', 'string', 'max:50', $this->workspaceUnique('raw_materials', 'material_code')],
             'material_name' => 'required|string|max:255',
             'material_type' => 'required|string|max:100',
             'unit' => 'required|string|max:20',
@@ -103,7 +103,7 @@ class RawMaterialController extends Controller
     public function update(Request $request, RawMaterial $raw_material)
     {
         $data = $request->validate([
-            'material_code' => 'required|string|max:50|unique:raw_materials,material_code,' . $raw_material->id,
+            'material_code' => ['required', 'string', 'max:50', $this->workspaceUnique('raw_materials', 'material_code', $raw_material->id)],
             'material_name' => 'required|string|max:255',
             'material_type' => 'required|string|max:100',
             'unit' => 'required|string|max:20',
