@@ -1,5 +1,5 @@
 import React, { useState } from "react";
-import { useForm } from "@inertiajs/react";
+import { Link, useForm } from "@inertiajs/react";
 import {
     Eye,
     EyeOff,
@@ -10,7 +10,7 @@ import {
     LockKeyhole,
 } from "lucide-react";
 
-export default function Login() {
+export default function Login({ needsSuperAdminSetup = false }: { needsSuperAdminSetup?: boolean }) {
     const [showPassword, setShowPassword] = useState(false);
     const [flashMessage, setFlashMessage] = useState<string | null>(null);
 
@@ -815,6 +815,30 @@ export default function Login() {
                                     )}
                                 </span>
                             </button>
+
+                            {needsSuperAdminSetup && (
+                                <Link
+                                    href={route("setup.super_admin.create")}
+                                    className="
+                                        w-full
+                                        h-11
+                                        flex
+                                        items-center
+                                        justify-center
+                                        rounded-xl
+                                        border
+                                        border-teal-200
+                                        bg-teal-50
+                                        text-teal-800
+                                        text-xs
+                                        font-bold
+                                        hover:bg-teal-100
+                                        transition-all
+                                    "
+                                >
+                                    Create Super Admin Account
+                                </Link>
+                            )}
 
                             {/* Divider */}
                             <div className="relative py-1">

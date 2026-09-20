@@ -7,10 +7,17 @@ use App\Http\Controllers\Auth\EmailVerificationPromptController;
 use App\Http\Controllers\Auth\NewPasswordController;
 use App\Http\Controllers\Auth\PasswordResetLinkController;
 use App\Http\Controllers\Auth\RegisteredUserController;
+use App\Http\Controllers\Auth\SetupSuperAdminController;
 use App\Http\Controllers\Auth\VerifyEmailController;
 use Illuminate\Support\Facades\Route;
 
 Route::middleware('guest')->group(function () {
+    Route::get('setup/super-admin', [SetupSuperAdminController::class, 'create'])
+        ->name('setup.super_admin.create');
+
+    Route::post('setup/super-admin', [SetupSuperAdminController::class, 'store'])
+        ->name('setup.super_admin.store');
+
     Route::get('register', [RegisteredUserController::class, 'create'])
         ->name('register');
 
