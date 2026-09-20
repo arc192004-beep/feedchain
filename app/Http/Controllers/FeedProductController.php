@@ -55,7 +55,7 @@ class FeedProductController extends Controller
     public function store(Request $request)
     {
         $data = $request->validate([
-            'product_code' => 'required|string|max:50|unique:feed_products,product_code',
+            'product_code' => ['required', 'string', 'max:50', $this->workspaceUnique('feed_products', 'product_code')],
             'product_name' => 'required|string|max:255',
             'feed_type' => 'required|string|max:100',
             'description' => 'nullable|string',
@@ -111,7 +111,7 @@ class FeedProductController extends Controller
     public function update(Request $request, FeedProduct $feed_product)
     {
         $data = $request->validate([
-            'product_code' => 'required|string|max:50|unique:feed_products,product_code,' . $feed_product->id,
+            'product_code' => ['required', 'string', 'max:50', $this->workspaceUnique('feed_products', 'product_code', $feed_product->id)],
             'product_name' => 'required|string|max:255',
             'feed_type' => 'required|string|max:100',
             'description' => 'nullable|string',

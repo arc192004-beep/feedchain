@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers;
 
+use App\Rules\UniqueInWorkspace;
 use Illuminate\Foundation\Auth\Access\AuthorizesRequests;
 use Illuminate\Foundation\Bus\DispatchesJobs;
 use Illuminate\Foundation\Validation\ValidatesRequests;
@@ -23,5 +24,17 @@ abstract class Controller extends BaseController
     protected function workspaceExists(string $table, string $column = 'id'): Exists
     {
         return Rule::exists($table, $column)->where('workspace_id', auth()->user()?->workspace_id);
+    }
+
+    /**
+     * A `unique` rule constrained to the authenticated user's workspace.
+     *
+     * Laravel's `unique` rule queries the database directly and therefore
+     * ignores Eloquent global scopes, so workspace scoping has to be added
+     * explicitly here.
+     */
+    protected function workspaceUnique(string $table, string $column, ?int $ignoreId = null): UniqueInWorkspace
+    {
+        return new UniqueInWorkspace($table, $column, $ignoreId);
     }
 }

@@ -269,8 +269,12 @@ class DashboardController extends Controller
             ->merge($distributions->pluck('distributionDate')->filter()->map(fn ($date) => substr($date, 0, 7)))
             ->merge($sales->pluck('salesDate')->filter()->map(fn ($date) => substr($date, 0, 7)))->unique()->sort()->values();
 
-        $shortages = StockAlert::query()->selectRaw("DATE_FORMAT(created_at, '%Y-%m') as month, COUNT(*) as total")
-            ->where('status', 'active')->groupBy('month')->pluck('total', 'month');
+        $shortages = StockAlert::query()
+            ->where('status', 'active')
+            ->selectRaw('created_at')
+            ->pluck('created_at')
+            ->map(fn ($createdAt) => substr((string) $createdAt, 0, 7))
+            ->countBy();
         $trends = $monthKeys->map(function ($month) use ($completed, $distributions, $sales, $movements, $shortages) {
             $monthBatches = $completed->filter(fn ($row) => str_starts_with((string) $row['productionDate'], $month));
             $rawUsed = $monthBatches->sum('totalRawMaterialUsed');

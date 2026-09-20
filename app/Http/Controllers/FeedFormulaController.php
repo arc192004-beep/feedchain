@@ -48,7 +48,7 @@ class FeedFormulaController extends Controller
     public function store(Request $request)
     {
         $data = $request->validate([
-            'formula_code' => 'required|string|max:50|unique:feed_formulas,formula_code',
+            'formula_code' => ['required', 'string', 'max:50', $this->workspaceUnique('feed_formulas', 'formula_code')],
             'formula_name' => 'required|string|max:255',
             'feed_product_id' => ['required', $this->workspaceExists('feed_products')],
             'batch_size_kg' => 'nullable|numeric|min:0.001',
@@ -134,7 +134,7 @@ class FeedFormulaController extends Controller
     public function update(Request $request, FeedFormula $feed_formula)
     {
         $data = $request->validate([
-            'formula_code' => 'required|string|max:50|unique:feed_formulas,formula_code,' . $feed_formula->id,
+            'formula_code' => ['required', 'string', 'max:50', $this->workspaceUnique('feed_formulas', 'formula_code', $feed_formula->id)],
             'formula_name' => 'required|string|max:255',
             'feed_product_id' => ['required', $this->workspaceExists('feed_products')],
             'batch_size_kg' => 'nullable|numeric|min:0.001',
