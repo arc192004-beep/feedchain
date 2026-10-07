@@ -87,9 +87,6 @@ return new class extends Migration
         });
 
         Schema::table('sales', function (Blueprint $table) {
-            if (! Schema::hasColumn('sales', 'sale_date')) {
-                $table->date('sale_date')->nullable();
-            }
             if (! Schema::hasColumn('sales', 'feed_product_id')) {
                 $table->unsignedBigInteger('feed_product_id')->nullable();
             }

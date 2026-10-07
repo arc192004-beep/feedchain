@@ -133,11 +133,11 @@ export default function CustomerSalesModule({
       const response = await csrfFetch(editItem ? `/sales/${editItem.id}` : '/sales', {
         method: editItem ? 'PUT' : 'POST',
         headers: { 'Content-Type': 'application/json', 'Accept': 'application/json', 'X-CSRF-TOKEN': document.querySelector<HTMLMetaElement>('meta[name="csrf-token"]')?.content ?? '' },
-        body: JSON.stringify({ customer_id: saleCustomerId, sale_date: saleDate, items: [{ feed_product_id: selectedProduct.id, quantity: saleQtyBags, unit_price: saleUnitPrice }] }),
+        body: JSON.stringify({ customer_id: saleCustomerId, sales_date: saleDate, items: [{ feed_product_id: selectedProduct.id, quantity: saleQtyBags, unit_price: saleUnitPrice }] }),
       });
       const saved = await response.json();
       if (!response.ok) throw new Error(saved.message || Object.values(saved.errors ?? {}).flat().join(' ') || 'Could not record sale.');
-      const item: SalesRecord = { id: String(saved.id), customerId: String(saved.customer_id), salesDate: saved.sale_date, feedProductCode: saleProductCode, quantityBags: Number(saleQtyBags), unitPrice: Number(saleUnitPrice), totalAmount: Number(saved.total_amount) };
+      const item: SalesRecord = { id: String(saved.id), customerId: String(saved.customer_id), salesDate: saved.sales_date, feedProductCode: saleProductCode, quantityBags: Number(saleQtyBags), unitPrice: Number(saleUnitPrice), totalAmount: Number(saved.total_amount) };
       onUpdateSales(editItem ? sales.map(s => s.id === editItem.id ? item : s) : [...sales, item]);
       onUpdateFeedProducts(feedProducts.map(p => p.id === selectedProduct.id ? { ...p, quantityBags: Number(selectedProduct.quantityBags) - saleQtyBags } : p));
       setShowModal(false);
@@ -176,7 +176,7 @@ export default function CustomerSalesModule({
       );
     } else {
       return sales.filter(s => {
-        const customer = customers.find(c => c.id === s.customerId);
+        const customer = customers.find(c => String(c.id) === String(s.customerId));
         const custNameText = customer ? customer.name.toLowerCase() : "";
         return s.feedProductCode.toLowerCase().includes(q) || custNameText.includes(q);
       });
@@ -267,7 +267,7 @@ export default function CustomerSalesModule({
               </thead>
               <tbody className="divide-y divide-slate-100">
                 {getFilteredItems().slice().reverse().map((s: any) => {
-                  const customer = customers.find(c => c.id === s.customerId);
+                  const customer = customers.find(c => String(c.id) === String(s.customerId));
                   const feed = feedProducts.find(f => f.code === s.feedProductCode);
                   return (
                     <tr key={s.id} className="hover:bg-slate-50/50">

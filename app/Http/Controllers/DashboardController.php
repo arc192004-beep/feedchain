@@ -187,7 +187,7 @@ class DashboardController extends Controller
                 'id' => $s->id,
                 'customerId' => $s->customer_id,
                 'customerName' => optional($s->customer)->customer_name ?? optional($s->customer)->name ?? '',
-                'salesDate' => $s->sale_date ? \Carbon\Carbon::parse($s->sale_date)->format('Y-m-d') : null,
+                'salesDate' => $s->sales_date ? \Carbon\Carbon::parse($s->sales_date)->format('Y-m-d') : null,
                 'feedProductId' => optional($firstItem)->feed_product_id,
                 'feedProductCode' => optional(optional($firstItem)->feedProduct)->product_code ?? '',
                 'feedProductName' => optional(optional($firstItem)->feedProduct)->product_name ?? '',
@@ -301,6 +301,7 @@ class DashboardController extends Controller
 
         $rawAvailability = $rawMaterials->map(fn ($item) => $this->stockState((float) $item['quantity'], (float) $item['minStock']));
         $feedAvailability = $feedProducts->map(fn ($item) => $this->stockState((float) $item['quantityBags'], (float) $item['minStockBags']));
+        $availability = collect(array_merge($rawAvailability->all(), $feedAvailability->all()));
         $latestBatch = $completed->sortByDesc('productionDate')->first();
         $latestFormula = $formulas->firstWhere('id', $latestBatch['formulaId'] ?? null) ?? $formulas->first();
 
@@ -309,7 +310,7 @@ class DashboardController extends Controller
             'kpis' => [
                 'completedBatches' => $completed->count(), 'totalBatches' => $batches->count(),
                 'rawMaterialKg' => (float) $rawMaterials->sum('quantity'), 'finishedFeedBags' => (float) $feedProducts->sum('quantityBags'),
-                'availability' => ['adequate' => $rawAvailability->merge($feedAvailability)->filter(fn ($s) => $s === 'adequate')->count(), 'low' => $rawAvailability->merge($feedAvailability)->filter(fn ($s) => $s === 'low')->count(), 'critical' => $rawAvailability->merge($feedAvailability)->filter(fn ($s) => $s === 'critical')->count(), 'out' => $rawAvailability->merge($feedAvailability)->filter(fn ($s) => $s === 'out')->count()],
+                'availability' => ['adequate' => $availability->filter(fn ($s) => $s === 'adequate')->count(), 'low' => $availability->filter(fn ($s) => $s === 'low')->count(), 'critical' => $availability->filter(fn ($s) => $s === 'critical')->count(), 'out' => $availability->filter(fn ($s) => $s === 'out')->count()],
             ],
             'productionPareto' => $this->pareto($productionPareto), 'salesPareto' => $this->pareto($salesPareto),
             'forecast' => $this->multipleRegression($trends, $latestFormula, $rawMaterials),

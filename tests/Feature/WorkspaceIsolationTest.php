@@ -249,7 +249,7 @@ test('a workspace cannot reference another workspace records when creating data'
 
     $this->actingAs($this->a['manager'])->post('/sales', [
         'customer_id' => $foreign['customer']->id,
-        'sale_date' => '2026-09-19',
+        'sales_date' => '2026-09-19',
         'items' => [[
             'feed_product_id' => $foreign['product']->id,
             'quantity' => 1,
@@ -306,7 +306,7 @@ test('production, inventory, distribution and sales stay isolated', function () 
 
     $this->actingAs($this->a['manager'])->postJson('/sales', [
         'customer_id' => $this->dataA['customer']->id,
-        'sale_date' => '2026-09-19',
+        'sales_date' => '2026-09-19',
         'items' => [[
             'feed_product_id' => $this->dataA['product']->id,
             'quantity' => 1,
@@ -347,7 +347,7 @@ test('a workspace cannot create or read another workspace sales and distribution
 
     $this->actingAs($this->a['manager'])->postJson('/sales', [
         'customer_id' => $foreign['customer']->id,
-        'sale_date' => '2026-09-19',
+        'sales_date' => '2026-09-19',
         'items' => [[
             'feed_product_id' => $foreign['product']->id,
             'quantity' => 1,

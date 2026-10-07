@@ -116,7 +116,7 @@ beforeEach(function () {
 
     $this->actingAs($this->one['super'])->postJson('/sales', [
         'customer_id' => $this->one['customer']->id,
-        'sale_date' => '2026-09-19',
+        'sales_date' => '2026-09-19',
         'items' => [[
             'feed_product_id' => $this->one['product']->id,
             'quantity' => 1,

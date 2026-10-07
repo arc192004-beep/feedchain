@@ -7,7 +7,7 @@
     <td>{{ $s->id }}</td>
     <td>{{ $s->sale_number ?? $s->sale_no }}</td>
     <td>{{ $s->customer->name ?? $s->customer->customer_name }}</td>
-    <td>{{ $s->sale_date->format('Y-m-d') }}</td>
+    <td>{{ \Carbon\Carbon::parse($s->sales_date)->format('Y-m-d') }}</td>
     <td>₱{{ number_format($s->total_amount, 2) }}</td>
     <td>
         <a href="{{ route('sales.show', $s) }}" class="text-blue-600 hover:underline">View</a> |

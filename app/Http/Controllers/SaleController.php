@@ -19,7 +19,7 @@ class SaleController extends Controller
 
     public function index(Request $request)
     {
-        $query = Sale::with(['customer', 'items.feedProduct'])->latest('sale_date');
+        $query = Sale::with(['customer', 'items.feedProduct'])->latest('sales_date');
 
         if ($search = $request->get('q')) {
             $query->where(function ($q) use ($search) {
@@ -96,7 +96,7 @@ class SaleController extends Controller
     {
         $data = $request->validate([
             'customer_id' => ['required', $this->workspaceExists('customers')],
-            'sale_date' => 'required|date',
+            'sales_date' => 'required|date',
             'status' => 'nullable|in:completed,pending,cancelled',
             'notes' => 'nullable|string|max:1000',
             'items' => 'required|array|min:1',
@@ -141,8 +141,7 @@ class SaleController extends Controller
 
         $sale->fill([
             'customer_id' => $data['customer_id'],
-            'sale_date' => $data['sale_date'],
-            'sales_date' => $data['sale_date'],
+            'sales_date' => $data['sales_date'],
             'total_amount' => $totalAmount,
             'status' => $data['status'] ?? 'completed',
             'notes' => $data['notes'] ?? null,
