@@ -1,10 +1,21 @@
 import '../css/app.css';
 
-import { createInertiaApp } from '@inertiajs/react';
+import { createInertiaApp, router } from '@inertiajs/react';
 import { resolvePageComponent } from 'laravel-vite-plugin/inertia-helpers';
 import { createRoot } from 'react-dom/client';
 import { route as routeFn } from 'ziggy-js';
 import { initializeTheme } from './hooks/use-appearance';
+
+// Keep the DOM meta[name="csrf-token"] in sync after Inertia page navigations (e.g. after login session regeneration)
+router.on('navigate', (event) => {
+    const token = (event.detail.page.props as { csrf_token?: string })?.csrf_token;
+    if (token) {
+        const meta = document.querySelector<HTMLMetaElement>('meta[name="csrf-token"]');
+        if (meta) {
+            meta.content = token;
+        }
+    }
+});
 
 declare global {
     const route: typeof routeFn;

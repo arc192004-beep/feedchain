@@ -148,11 +148,12 @@ class DashboardController extends Controller
             ];
         });
 
-        $customerSortColumn = Schema::hasColumn('customers', 'customer_name') ? 'customer_name' : 'name';
+        $customerSortColumn = Schema::hasColumn('customers', 'name') ? 'name' : 'customer_name';
         $customers = Customer::orderBy($customerSortColumn)->get()->map(function ($c) {
             return [
                 'id' => $c->id,
-                'name' => $c->customer_name ?? $c->name ?? '',
+                'customerCode' => $c->customer_code ?? '',
+                'name' => $c->name ?? $c->customer_name ?? '',
                 'fishCage' => $c->fish_cage ?? '',
                 'address' => $c->address ?? '',
                 'phone' => $c->contact_number ?? $c->phone ?? '',

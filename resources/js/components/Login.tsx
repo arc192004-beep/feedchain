@@ -1,5 +1,5 @@
 import React, { useState } from "react";
-import { Link, useForm } from "@inertiajs/react";
+import { Link, useForm, usePage } from "@inertiajs/react";
 import {
     Eye,
     EyeOff,
@@ -11,6 +11,9 @@ import {
 } from "lucide-react";
 
 export default function Login({ needsSuperAdminSetup = false }: { needsSuperAdminSetup?: boolean }) {
+    const page = usePage<{ needsSuperAdminSetup?: boolean }>();
+    const shouldShowSuperAdminSetup = Boolean(needsSuperAdminSetup || page.props?.needsSuperAdminSetup);
+
     const [showPassword, setShowPassword] = useState(false);
     const [flashMessage, setFlashMessage] = useState<string | null>(null);
 
@@ -816,7 +819,7 @@ export default function Login({ needsSuperAdminSetup = false }: { needsSuperAdmi
                                 </span>
                             </button>
 
-                            {needsSuperAdminSetup && (
+                            {shouldShowSuperAdminSetup && (
                                 <Link
                                     href={route("setup.super_admin.create")}
                                     className="

@@ -22,7 +22,10 @@ class CustomerController extends Controller
             return response()->json($customers);
         }
 
-        return view('customers.index', compact('customers'));
+        return view('customers.index', [
+            'customers' => $customers,
+            'items' => $customers,
+        ]);
     }
 
     public function create()
@@ -81,13 +84,22 @@ class CustomerController extends Controller
 
     private function validated(Request $request): array
     {
-        return $request->validate([
+        if ($request->filled('customer_name') && ! $request->filled('name')) {
+            $request->merge(['name' => $request->input('customer_name')]);
+        }
+
+        $validated = $request->validate([
             'name' => 'required|string|max:255',
             'fish_cage' => 'nullable|string|max:255',
             'address' => 'required|string|max:500',
             'contact_number' => 'required|string|max:50',
             'email' => 'nullable|email|max:255',
             'status' => 'nullable|in:active,inactive',
+            'customer_code' => 'nullable|string|max:50',
         ]);
+
+        unset($validated['customer_name']);
+
+        return $validated;
     }
 }

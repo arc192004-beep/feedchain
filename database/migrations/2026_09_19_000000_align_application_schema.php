@@ -69,6 +69,9 @@ return new class extends Migration
         });
 
         Schema::table('customers', function (Blueprint $table) {
+            if (! Schema::hasColumn('customers', 'customer_code')) {
+                $table->string('customer_code')->nullable();
+            }
             if (! Schema::hasColumn('customers', 'name')) {
                 $table->string('name')->nullable();
             }

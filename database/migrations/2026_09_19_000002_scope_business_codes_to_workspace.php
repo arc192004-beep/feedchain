@@ -31,7 +31,7 @@ return new class extends Migration
     public function up(): void
     {
         foreach ($this->codes as $table => $column) {
-            if (! Schema::hasTable($table) || ! Schema::hasColumn($table, 'workspace_id')) {
+            if (! Schema::hasTable($table) || ! Schema::hasColumn($table, 'workspace_id') || ! Schema::hasColumn($table, $column)) {
                 continue;
             }
 
@@ -56,7 +56,7 @@ return new class extends Migration
     public function down(): void
     {
         foreach ($this->codes as $table => $column) {
-            if (! Schema::hasTable($table)) {
+            if (! Schema::hasTable($table) || ! Schema::hasColumn($table, $column)) {
                 continue;
             }
 
